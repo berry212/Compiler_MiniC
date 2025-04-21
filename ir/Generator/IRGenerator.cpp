@@ -213,6 +213,8 @@ bool IRGenerator::ir_function_define(ast_node * node)
     }
     newFunc->setReturnValue(retValue);
 
+    // 这里最好设置返回值变量的初值为0，以便在没有返回值时能够返回0
+
     // 函数内已经进入作用域，内部不再需要做变量的作用域管理
     block_node->needScope = false;
 
