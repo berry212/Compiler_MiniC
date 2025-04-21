@@ -85,6 +85,7 @@
 	"C_Cpp.intelliSenseEngine": "default",
 	"C_Cpp.codeAnalysis.clangTidy.enabled": true,
 	"clangd.serverCompletionRanking": true,
+	"clangd.enableCodeCompletion": true,
 	"clangd.arguments": [
 		// 在后台自动分析文件（基于complie_commands)
 		"--background-index",
@@ -102,7 +103,6 @@
 		"--header-insertion=iwyu",
 		// pch优化的位置，如果内存足够可观注释掉这个选项
 		"--pch-storage=disk",
-		"-std=c++17"
 	],
 	// 作为编译失败的备选标志，指定了包含文件夹的路径
 	"clangd.fallbackFlags": [
