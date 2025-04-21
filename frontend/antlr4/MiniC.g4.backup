@@ -13,19 +13,19 @@ grammar MiniC;
 // 源文件编译单元定义
 compileUnit: (funcDef | varDecl)* EOF;
 
-// 函数定义，目前不支持形参，也不支持返回void类型等
+// 函数定义，int id() block
 funcDef: T_INT T_ID T_L_PAREN T_R_PAREN block;
 
-// 语句块看用作函数体，这里允许多个语句，并且不含任何语句
+// ?代表0个或1个 { blockItemList } | {}
 block: T_L_BRACE blockItemList? T_R_BRACE;
 
-// 每个ItemList可包含至少一个Item
+// 至少一个blockItem
 blockItemList: blockItem+;
 
-// 每个Item可以是一个语句，或者变量声明语句
+// 语句或变量声明
 blockItem: statement | varDecl;
 
-// 变量声明，目前不支持变量含有初值
+// 变量声明 basicType id, id.... ;
 varDecl: basicType varDef (T_COMMA varDef)* T_SEMICOLON;
 
 // 基本类型
@@ -41,34 +41,26 @@ statement:
 	| block								# blockStatement
 	| expr? T_SEMICOLON					# expressionStatement;
 
-// 表达式文法 expr : AddExp 表达式支持加法、减法和乘法、除法、求余运算
+// 表达式文法 expr : AddExp 表达式目前只支持加法与减法运算
 expr: addExp;
 
 // 加减表达式
 addExp: mulExp (addOp mulExp)*;
 
-// 加减运算符
-addOp: T_ADD | T_SUB;
-
-// 乘除模表达式
-mulExp: unaryExp (mulOp unaryExp)*;
-
-// 乘除模运算符
 mulOp: T_MUL | T_DIV | T_MOD;
 
-// 一元表达式
-unaryExp:
-	primaryExp
-	| T_ID T_L_PAREN realParamList? T_R_PAREN
-	| unaryOp unaryExp;
+mulExp: unaryExp (mulOp unaryExp)*;
 
-// 一元运算符
-unaryOp: T_SUB;
+// 加减运算符: + | -
+addOp: T_ADD | T_SUB;
 
-// 基本表达式：括号表达式、整数、左值表达式
+// 一元表达式: 基本表达式 | 函数调用 id (realParamList)
+unaryExp: primaryExp | T_ID T_L_PAREN realParamList? T_R_PAREN | T_SUB unaryExp;
+
+// 基本表达式：括号表达式、整数、左值表达式: (exp) | 数字 | id左值表达式
 primaryExp: T_L_PAREN expr T_R_PAREN | T_DIGIT | lVal;
 
-// 实参列表
+// 实参列表    exp, exp, ...
 realParamList: expr (T_COMMA expr)*;
 
 // 左值表达式
@@ -87,6 +79,7 @@ T_COMMA: ',';
 
 T_ADD: '+';
 T_SUB: '-';
+
 T_MUL: '*';
 T_DIV: '/';
 T_MOD: '%';
@@ -97,12 +90,14 @@ T_INT: 'int';
 T_VOID: 'void';
 
 T_ID: [a-zA-Z_][a-zA-Z0-9_]*;
-// 支持十进制、八进制和十六进制
-T_DIGIT:
-	'0'
-	| [1-9][0-9]*
-	| '0' [0-7]+
-	| '0' [xX][0-9a-fA-F]+;
+T_DIGIT: DecimalConstant | OctalConstant | HexadecimalConstant;
 
+fragment DecimalConstant: '0' | [1-9][0-9]*;
+fragment OctalConstant: '0' [0-7]+;
+fragment HexadecimalConstant: ('0x' | '0X') [0-9a-fA-F]+;
 /* 空白符丢弃 */
 WS: [ \r\n\t]+ -> skip;
+
+// 注释丢弃
+COMMENT: '//' ~[\r\n]* -> skip;
+MULTILINE_COMMENT: '/*' .*? '*/' -> skip;

@@ -82,7 +82,15 @@ string getNodeName(ast_node * astnode)
             nodeName = "real-params";
             break;
             // TODO 这里追加其它类型的结点，返回对应结点的字符串
-
+		case ast_operator_type::AST_OP_MUL:
+            nodeName = "*";
+			break;
+		case ast_operator_type::AST_OP_DIV:
+            nodeName = "/";
+			break;
+		case ast_operator_type::AST_OP_MOD:
+            nodeName = "%";
+			break;
         default:
             nodeName = "unknown";
             break;

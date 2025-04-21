@@ -160,4 +160,19 @@ protected:
     /// @return std::any AST的节点
     ///
     std::any visitExpressionStatement(MiniCParser::ExpressionStatementContext * context) override;
+	
+	/// @brief 非终结符mulExp分析 乘法除法取模 
+	/// @param ctx CST上下文
+	/// @return std::any AST的节点
+	std::any visitMulExp(MiniCParser::MulExpContext *ctx) override;
+
+    /// @brief 非终结符mulOp
+    /// @param ctx 
+    /// @return 
+    std::any visitMulOp(MiniCParser::MulOpContext * ctx) override;
+
+    /// @brief 非终结符UnaryOp
+    /// @param ctx 
+    /// @return 
+    std::any visitUnaryOp(MiniCParser::UnaryOpContext * ctx) override;
 };

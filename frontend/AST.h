@@ -90,6 +90,17 @@ enum class ast_operator_type : int {
     AST_OP_SUB, //
 
     // TODO 抽象语法树其它内部节点运算符追加
+	/// @brief 一元取负运算符
+	AST_OP_NEG,
+
+	/// @brief 除法
+	AST_OP_DIV,
+
+	/// @brief 乘法
+	AST_OP_MUL,
+	
+	/// @brief 取余
+	AST_OP_MOD,
 
     /// @brief 最大标识符，表示非法运算符
     AST_OP_MAX,
