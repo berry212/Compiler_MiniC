@@ -15,6 +15,7 @@
 ///
 #include "Module.h"
 
+#include "IntegerType.h"
 #include "ScopeStack.h"
 #include "Common.h"
 #include "VoidType.h"

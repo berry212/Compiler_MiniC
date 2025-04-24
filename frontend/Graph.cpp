@@ -15,9 +15,11 @@
 /// </table>
 ///
 
+#include <cstdint>
 #include <vector>
 
 #include "AST.h"
+#include "Function.h"
 
 using namespace std;
 
@@ -90,12 +92,14 @@ string getNodeName(ast_node * astnode)
 			break;
 		case ast_operator_type::AST_OP_MOD:
             nodeName = "%";
-			break;
+            break;
+        case ast_operator_type::AST_OP_NEG:
+            nodeName = "-";
+            break;
         default:
             nodeName = "unknown";
             break;
     }
-
     return nodeName;
 }
 

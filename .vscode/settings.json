@@ -82,7 +82,7 @@
 		"listeners": false,
 		"visitors": true
 	},
-	"C_Cpp.intelliSenseEngine": "default",
+	"C_Cpp.intelliSenseEngine": "disabled",
 	"C_Cpp.codeAnalysis.clangTidy.enabled": true,
 	"clangd.serverCompletionRanking": true,
 	"clangd.enableCodeCompletion": true,

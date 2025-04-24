@@ -554,3 +554,30 @@ void ILocArm32::jump(std::string label)
 {
     emit("b", label);
 }
+
+/*新增指令*/
+/// @brief 整数乘法指令
+/// @param dst_reg_no 目标寄存器号
+/// @param src1_reg_no 源寄存器1号
+/// @param src2_reg_no 源寄存器2号
+void ILocArm32::mul(int dst_reg_no, int src1_reg_no, int src2_reg_no)
+{
+    std::string dst_reg_name = PlatformArm32::regName[dst_reg_no];
+    std::string src1_reg_name = PlatformArm32::regName[src1_reg_no];
+    std::string src2_reg_name = PlatformArm32::regName[src2_reg_no];
+
+    emit("mul", dst_reg_name, src1_reg_name, src2_reg_name);
+}
+
+/// @brief 整数除法指令 (sdiv为有符号除法)
+/// @param dst_reg_no 目标寄存器号
+/// @param src1_reg_no 源寄存器1号
+/// @param src2_reg_no 源寄存器2号
+void ILocArm32::idiv(int dst_reg_no, int src1_reg_no, int src2_reg_no)
+{
+    std::string dst_reg_name = PlatformArm32::regName[dst_reg_no];
+    std::string src1_reg_name = PlatformArm32::regName[src1_reg_no];
+    std::string src2_reg_name = PlatformArm32::regName[src2_reg_no];
+
+    emit("sdiv", dst_reg_name, src1_reg_name, src2_reg_name);
+}

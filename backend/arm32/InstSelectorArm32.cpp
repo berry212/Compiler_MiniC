@@ -52,6 +52,11 @@ InstSelectorArm32::InstSelectorArm32(vector<Instruction *> & _irCode,
 
     translator_handlers[IRInstOperator::IRINST_OP_FUNC_CALL] = &InstSelectorArm32::translate_call;
     translator_handlers[IRInstOperator::IRINST_OP_ARG] = &InstSelectorArm32::translate_arg;
+
+    /*新增指令*/
+    translator_handlers[IRInstOperator::IRINST_OP_MUL_I] = &InstSelectorArm32::translate_mul_int32;
+    translator_handlers[IRInstOperator::IRINST_OP_DIV_I] = &InstSelectorArm32::translate_div_int32;
+    translator_handlers[IRInstOperator::IRINST_OP_MOD_I] = &InstSelectorArm32::translate_mod_int32;
 }
 
 ///
@@ -422,4 +427,187 @@ void InstSelectorArm32::translate_arg(Instruction * inst)
     }
 
     realArgCount++;
+}
+
+/// @brief 整数乘法指令翻译成ARM32汇编
+/// @param inst IR指令
+void InstSelectorArm32::translate_mul_int32(Instruction * inst)
+{
+    Value * result = inst;
+    Value * arg1 = inst->getOperand(0);
+    Value * arg2 = inst->getOperand(1);
+
+    int32_t arg1_reg_no = arg1->getRegId();
+    int32_t arg2_reg_no = arg2->getRegId();
+    int32_t result_reg_no = inst->getRegId();
+    int32_t load_result_reg_no, load_arg1_reg_no, load_arg2_reg_no;
+
+    // 看arg1是否是寄存器，若是则寄存器寻址，否则要load变量到寄存器中
+    if (arg1_reg_no == -1) {
+        // 分配一个寄存器r8
+        load_arg1_reg_no = simpleRegisterAllocator.Allocate(arg1);
+
+        // arg1 -> r8，这里可能由于偏移不满足指令的要求，需要额外分配寄存器
+        iloc.load_var(load_arg1_reg_no, arg1);
+    } else {
+        load_arg1_reg_no = arg1_reg_no;
+    }
+
+    // 看arg2是否是寄存器，若是则寄存器寻址，否则要load变量到寄存器中
+    if (arg2_reg_no == -1) {
+        // 分配一个寄存器r9
+        load_arg2_reg_no = simpleRegisterAllocator.Allocate(arg2);
+
+        // arg2 -> r9
+        iloc.load_var(load_arg2_reg_no, arg2);
+    } else {
+        load_arg2_reg_no = arg2_reg_no;
+    }
+
+    // 看结果变量是否是寄存器，若不是则需要分配一个新的寄存器来保存运算的结果
+    if (result_reg_no == -1) {
+        // 分配一个寄存器r10，用于暂存结果
+        load_result_reg_no = simpleRegisterAllocator.Allocate(result);
+    } else {
+        load_result_reg_no = result_reg_no;
+    }
+
+    // 执行乘法操作 r8 * r9 -> r10
+    iloc.mul(load_result_reg_no, load_arg1_reg_no, load_arg2_reg_no);
+
+    // 结果不是寄存器，则需要把临时结果保存到结果变量中
+    if (result_reg_no == -1) {
+        // r10 -> result
+        iloc.store_var(load_result_reg_no, result, ARM32_TMP_REG_NO);
+    }
+
+    // 释放寄存器
+    simpleRegisterAllocator.free(arg1);
+    simpleRegisterAllocator.free(arg2);
+    simpleRegisterAllocator.free(result);
+}
+
+/*新增指令处理函数*/
+/// @brief 整数除法指令翻译成ARM32汇编
+/// @param inst IR指令
+void InstSelectorArm32::translate_div_int32(Instruction * inst)
+{
+    Value * result = inst;
+    Value * arg1 = inst->getOperand(0);
+    Value * arg2 = inst->getOperand(1);
+
+    int32_t arg1_reg_no = arg1->getRegId();
+    int32_t arg2_reg_no = arg2->getRegId();
+    int32_t result_reg_no = inst->getRegId();
+    int32_t load_result_reg_no, load_arg1_reg_no, load_arg2_reg_no;
+
+    // 看arg1是否是寄存器，若是则寄存器寻址，否则要load变量到寄存器中
+    if (arg1_reg_no == -1) {
+        // 分配一个寄存器
+        load_arg1_reg_no = simpleRegisterAllocator.Allocate(arg1);
+
+        // arg1 -> 寄存器
+        iloc.load_var(load_arg1_reg_no, arg1);
+    } else {
+        load_arg1_reg_no = arg1_reg_no;
+    }
+
+    // 看arg2是否是寄存器，若是则寄存器寻址，否则要load变量到寄存器中
+    if (arg2_reg_no == -1) {
+        // 分配一个寄存器
+        load_arg2_reg_no = simpleRegisterAllocator.Allocate(arg2);
+
+        // arg2 -> 寄存器
+        iloc.load_var(load_arg2_reg_no, arg2);
+    } else {
+        load_arg2_reg_no = arg2_reg_no;
+    }
+
+    // 看结果变量是否是寄存器，若不是则需要分配一个新的寄存器来保存运算的结果
+    if (result_reg_no == -1) {
+        // 分配一个寄存器，用于暂存结果
+        load_result_reg_no = simpleRegisterAllocator.Allocate(result);
+    } else {
+        load_result_reg_no = result_reg_no;
+    }
+
+    // 执行除法操作
+    iloc.idiv(load_result_reg_no, load_arg1_reg_no, load_arg2_reg_no);
+
+    // 结果不是寄存器，则需要把临时结果保存到结果变量中
+    if (result_reg_no == -1) {
+        iloc.store_var(load_result_reg_no, result, ARM32_TMP_REG_NO);
+    }
+
+    // 释放寄存器
+    simpleRegisterAllocator.free(arg1);
+    simpleRegisterAllocator.free(arg2);
+    simpleRegisterAllocator.free(result);
+}
+
+/// @brief 整数取模指令翻译成ARM32汇编
+/// @param inst IR指令
+void InstSelectorArm32::translate_mod_int32(Instruction * inst)
+{
+    Value * result = inst;
+    Value * arg1 = inst->getOperand(0);
+    Value * arg2 = inst->getOperand(1);
+
+    int32_t arg1_reg_no = arg1->getRegId();
+    int32_t arg2_reg_no = arg2->getRegId();
+    int32_t result_reg_no = inst->getRegId();
+    int32_t load_result_reg_no, load_arg1_reg_no, load_arg2_reg_no;
+    int32_t tmp_reg_no = ARM32_TMP_REG_NO; // 临时寄存器
+
+    // 看arg1是否是寄存器，若是则寄存器寻址，否则要load变量到寄存器中
+    if (arg1_reg_no == -1) {
+        // 分配一个寄存器
+        load_arg1_reg_no = simpleRegisterAllocator.Allocate(arg1);
+
+        // arg1 -> 寄存器
+        iloc.load_var(load_arg1_reg_no, arg1);
+    } else {
+        load_arg1_reg_no = arg1_reg_no;
+    }
+
+    // 看arg2是否是寄存器，若是则寄存器寻址，否则要load变量到寄存器中
+    if (arg2_reg_no == -1) {
+        // 分配一个寄存器
+        load_arg2_reg_no = simpleRegisterAllocator.Allocate(arg2);
+
+        // arg2 -> 寄存器
+        iloc.load_var(load_arg2_reg_no, arg2);
+    } else {
+        load_arg2_reg_no = arg2_reg_no;
+    }
+
+    // 看结果变量是否是寄存器，若不是则需要分配一个新的寄存器来保存运算的结果
+    if (result_reg_no == -1) {
+        // 分配一个寄存器，用于暂存结果
+        load_result_reg_no = simpleRegisterAllocator.Allocate(result);
+    } else {
+        load_result_reg_no = result_reg_no;
+    }
+
+    // 强制占用临时寄存器，确保可用
+    simpleRegisterAllocator.Allocate(tmp_reg_no);
+
+    // 使用额外指令计算模运算
+    iloc.idiv(tmp_reg_no, load_arg1_reg_no, load_arg2_reg_no); // tmp = a/b
+    iloc.mul(tmp_reg_no, tmp_reg_no, load_arg2_reg_no);        // tmp = (a/b)*b
+    iloc.inst("sub",
+              PlatformArm32::regName[load_result_reg_no],
+              PlatformArm32::regName[load_arg1_reg_no],
+              PlatformArm32::regName[tmp_reg_no]); // dst = a - (a/b)*b
+
+    // 结果不是寄存器，则需要把临时结果保存到结果变量中
+    if (result_reg_no == -1) {
+        iloc.store_var(load_result_reg_no, result, ARM32_TMP_REG_NO);
+    }
+
+    // 释放寄存器
+    simpleRegisterAllocator.free(arg1);
+    simpleRegisterAllocator.free(arg2);
+    simpleRegisterAllocator.free(result);
+    simpleRegisterAllocator.free(tmp_reg_no);
 }

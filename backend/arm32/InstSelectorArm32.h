@@ -91,6 +91,11 @@ protected:
     ///
     void translate_arg(Instruction * inst);
 
+    /*新增指令*/
+    void translate_mul_int32(Instruction * inst);
+    void translate_div_int32(Instruction * inst);
+    void translate_mod_int32(Instruction * inst);
+    
     ///
     /// @brief 输出IR指令
     ///

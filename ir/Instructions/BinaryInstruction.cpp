@@ -15,6 +15,7 @@
 /// </table>
 ///
 #include "BinaryInstruction.h"
+#include "Instruction.h"
 
 /// @brief 构造函数
 /// @param _op 操作符
@@ -50,7 +51,18 @@ void BinaryInstruction::toString(std::string & str)
             // 减法指令，二元运算
             str = getIRName() + " = sub " + src1->getIRName() + "," + src2->getIRName();
             break;
-
+        case IRInstOperator::IRINST_OP_MUL_I:
+            // 乘法指令，二元运算
+            str = getIRName() + " = mul " + src1->getIRName() + "," + src2->getIRName();
+            break;
+        case IRInstOperator::IRINST_OP_DIV_I:
+            // 除法指令，二元运算
+            str = getIRName() + " = div " + src1->getIRName() + "," + src2->getIRName();
+            break;
+        case IRInstOperator::IRINST_OP_MOD_I:
+            // 取模指令，二元运算
+            str = getIRName() + " = mod " + src1->getIRName() + "," + src2->getIRName();
+            break;
         default:
             // 未知指令
             Instruction::toString(str);

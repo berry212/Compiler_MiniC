@@ -346,8 +346,7 @@ std::any MiniCCSTVisitor::visitUnaryExp(MiniCParser::UnaryExpContext * ctx)
         
         // 创建一元取负节点，其孩子为表达式
         return create_contain_node(op, expr);
-	} 
-	else {
+	} else {
         return nullptr;
     }
 }

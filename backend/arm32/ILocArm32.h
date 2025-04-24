@@ -214,4 +214,8 @@ public:
 
     /// @brief 删除无用的Label指令
     void deleteUnusedLabel();
+
+    /*新增指令*/
+    void mul(int dst_reg_no, int src1_reg_no, int src2_reg_no);
+    void idiv(int dst_reg_no, int src1_reg_no, int src2_reg_no);
 };
