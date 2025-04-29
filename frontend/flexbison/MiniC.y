@@ -98,7 +98,7 @@ CompileUnit : FuncDef {
 	;
 
 // 函数定义，目前支持整数返回类型，不支持形参
-FuncDef : T_INT T_ID T_L_PAREN T_R_PAREN Block  {
+FuncDef : BasicType T_ID T_L_PAREN T_R_PAREN Block  {
 
 		// 函数返回类型
 		type_attr funcReturnType = $1;
