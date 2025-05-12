@@ -106,3 +106,9 @@ T_DIGIT:
 
 /* 空白符丢弃 */
 WS: [ \r\n\t]+ -> skip;
+
+/* 多行注释丢弃 */
+BLOCK_COMMENT: '/*' .*? '*/' -> skip;
+
+/* 单行注释丢弃 */
+LINE_COMMENT: '//' ~[\r\n]* -> skip;

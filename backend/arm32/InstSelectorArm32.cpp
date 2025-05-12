@@ -594,11 +594,11 @@ void InstSelectorArm32::translate_mod_int32(Instruction * inst)
 
     // 使用额外指令计算模运算
     iloc.idiv(tmp_reg_no, load_arg1_reg_no, load_arg2_reg_no); // tmp = a/b
-    iloc.mul(tmp_reg_no, tmp_reg_no, load_arg2_reg_no);        // tmp = (a/b)*b
+    iloc.mul(tmp_reg_no, tmp_reg_no, load_arg2_reg_no);        // tmp = (tmp)*b
     iloc.inst("sub",
               PlatformArm32::regName[load_result_reg_no],
               PlatformArm32::regName[load_arg1_reg_no],
-              PlatformArm32::regName[tmp_reg_no]); // dst = a - (a/b)*b
+              PlatformArm32::regName[tmp_reg_no]); // dst = a - tmp
 
     // 结果不是寄存器，则需要把临时结果保存到结果变量中
     if (result_reg_no == -1) {
