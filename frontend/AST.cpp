@@ -341,7 +341,7 @@ ast_node * create_var_decl_stmt_node(ast_node * first_child)
     return stmt_node;
 }
 
-ast_node * createVarDeclNode(Type * type, var_id_attr & id)
+static ast_node * createVarDeclNode(Type * type, var_id_attr & id)
 {
     // 创建整型类型节点的终结符节点
     ast_node * type_node = ast_node::New(type);
@@ -362,7 +362,7 @@ ast_node * createVarDeclNode(Type * type, var_id_attr & id)
     return decl_node;
 }
 
-ast_node * createVarDeclNode(type_attr & type, var_id_attr & id)
+static ast_node * createVarDeclNode(type_attr & type, var_id_attr & id)
 {
     return createVarDeclNode(typeAttr2Type(type), id);
 }

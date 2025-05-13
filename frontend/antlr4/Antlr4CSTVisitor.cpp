@@ -15,7 +15,6 @@
 /// </table>
 ///
 
-#include <cstddef>
 #include <string>
 
 #include "Antlr4CSTVisitor.h"
