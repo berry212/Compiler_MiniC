@@ -173,6 +173,20 @@ protected:
 
     /// @brief 非终结符UnaryOp
     /// @param ctx 
-    /// @return 
+    /// @return
     std::any visitUnaryOp(MiniCParser::UnaryOpContext * ctx) override;
+
+    // 新增控制流语句的访问方法
+    std::any visitIfStmt(MiniCParser::IfStmtContext * ctx) override;
+    std::any visitWhileStmt(MiniCParser::WhileStmtContext * ctx) override;
+    std::any visitBreakStmt(MiniCParser::BreakStmtContext * ctx) override;
+    std::any visitContinueStmt(MiniCParser::ContinueStmtContext * ctx) override;
+
+    // 新增逻辑和关系表达式的访问方法
+    std::any visitLogicOrExp(MiniCParser::LogicOrExpContext * ctx) override;
+    std::any visitLogicAndExp(MiniCParser::LogicAndExpContext * ctx) override;
+    std::any visitEqExp(MiniCParser::EqExpContext * ctx) override;
+    std::any visitRelExp(MiniCParser::RelExpContext * ctx) override;
+    std::any visitEqOp(MiniCParser::EqOpContext * ctx) override;
+    std::any visitRelOp(MiniCParser::RelOpContext * ctx) override;
 };

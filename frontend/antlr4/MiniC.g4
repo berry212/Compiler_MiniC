@@ -34,15 +34,35 @@ basicType: T_INT;
 // 变量定义
 varDef: T_ID;
 
-// 目前语句支持return和赋值语句
+// 目前语句支持return和赋值语句 ?表示前面内容出现 1 或 0 次
 statement:
 	T_RETURN expr T_SEMICOLON			# returnStatement
 	| lVal T_ASSIGN expr T_SEMICOLON	# assignStatement
 	| block								# blockStatement
+	| ifStatement						# ifStmt
+	| whileStatement					# whileStmt
+	| breakStatement					# breakStmt
+	| continueStatement					# continueStmt
 	| expr? T_SEMICOLON					# expressionStatement;
 
-// 表达式文法 expr : AddExp 表达式支持加法、减法和乘法、除法、求余运算
-expr: addExp;
+// 新增控制流语句规则
+ifStatement: T_IF T_L_PAREN expr T_R_PAREN statement (T_ELSE statement)?;
+whileStatement: T_WHILE T_L_PAREN expr T_R_PAREN statement;
+breakStatement: T_BREAK T_SEMICOLON;
+continueStatement: T_CONTINUE T_SEMICOLON;
+
+// 分层设计，运算符优先级
+expr: logicOrExp;
+
+logicOrExp: logicAndExp (T_LOR logicAndExp)*;
+
+logicAndExp: eqExp (T_LAND eqExp)*;
+
+eqExp: relExp (eqOp relExp)*;
+eqOp: T_EQ | T_NE;
+
+relExp: addExp (relOp addExp)*;
+relOp: T_GT | T_LT | T_GE | T_LE;
 
 // 加减表达式
 addExp: mulExp (addOp mulExp)*;
@@ -60,7 +80,8 @@ mulOp: T_MUL | T_DIV | T_MOD;
 unaryExp:
 	primaryExp
 	| T_ID T_L_PAREN realParamList? T_R_PAREN
-	| unaryOp unaryExp;
+	| unaryOp unaryExp
+	| T_LNOT unaryExp; // 添加逻辑非操作
 
 // 一元运算符
 unaryOp: T_SUB;
@@ -95,6 +116,11 @@ T_MOD: '%';
 T_RETURN: 'return';
 T_INT: 'int';
 T_VOID: 'void';
+T_IF: 'if';
+T_ELSE: 'else';
+T_WHILE: 'while';
+T_BREAK: 'break';
+T_CONTINUE: 'continue';
 
 T_ID: [a-zA-Z_][a-zA-Z0-9_]*;
 // 支持十进制、八进制和十六进制
@@ -103,6 +129,19 @@ T_DIGIT:
 	| [1-9][0-9]*
 	| '0' [0-7]+
 	| '0' [xX][0-9a-fA-F]+;
+
+// 新增关系运算符
+T_GT: '>';
+T_LT: '<';
+T_GE: '>=';
+T_LE: '<=';
+T_EQ: '==';
+T_NE: '!=';
+
+// 新增逻辑运算符
+T_LAND: '&&';
+T_LOR: '||';
+T_LNOT: '!';
 
 /* 空白符丢弃 */
 WS: [ \r\n\t]+ -> skip;

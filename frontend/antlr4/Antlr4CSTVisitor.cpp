@@ -15,6 +15,7 @@
 /// </table>
 ///
 
+#include <cstddef>
 #include <string>
 
 #include "Antlr4CSTVisitor.h"
@@ -169,6 +170,14 @@ std::any MiniCCSTVisitor::visitStatement(MiniCParser::StatementContext * ctx)
         return visitBlockStatement(blockCtx);
     } else if (Instanceof(exprCtx, MiniCParser::ExpressionStatementContext *, ctx)) {
         return visitExpressionStatement(exprCtx);
+    } else if (Instanceof(ifCtx, MiniCParser::IfStmtContext *, ctx)) {
+        return visitIfStmt(ifCtx);
+    } else if (Instanceof(whileCtx, MiniCParser::WhileStmtContext *, ctx)) {
+        return visitWhileStmt(whileCtx);
+    } else if (Instanceof(breakCtx, MiniCParser::BreakStmtContext *, ctx)) {
+        return visitBreakStmt(breakCtx);
+    } else if (Instanceof(continueCtx, MiniCParser::ContinueStmtContext *, ctx)) {
+        return visitContinueStmt(continueCtx);
     }
 
     return nullptr;
@@ -195,7 +204,7 @@ std::any MiniCCSTVisitor::visitExpr(MiniCParser::ExprContext * ctx)
 {
     // 识别产生式：expr: addExp;
 
-    return visitAddExp(ctx->addExp());
+    return visitLogicOrExp(ctx->logicOrExp());
 }
 
 std::any MiniCCSTVisitor::visitAssignStatement(MiniCParser::AssignStatementContext * ctx)
@@ -256,9 +265,9 @@ std::any MiniCCSTVisitor::visitAddExp(MiniCParser::AddExpContext * ctx)
     return left;
 }
 
-std::any MiniCCSTVisitor::visitMulExp(MiniCParser::MulExpContext *ctx)
+std::any MiniCCSTVisitor::visitMulExp(MiniCParser::MulExpContext * ctx)
 {
-	if (ctx->mulOp().empty()) {
+    if (ctx->mulOp().empty()) {
         // 没有addOp运算符，则说明闭包识别为0，只识别了第一个非终结符unaryExp
         return visitUnaryExp(ctx->unaryExp()[0]);
     }
@@ -292,7 +301,7 @@ std::any MiniCCSTVisitor::visitMulExp(MiniCParser::MulExpContext *ctx)
 
 std::any MiniCCSTVisitor::visitMulOp(MiniCParser::MulOpContext * ctx)
 {
-	if (ctx->T_DIV()) {
+    if (ctx->T_DIV()) {
         return ast_operator_type::AST_OP_DIV;
     } else if (ctx->T_MUL()) {
         return ast_operator_type::AST_OP_MUL;
@@ -339,19 +348,24 @@ std::any MiniCCSTVisitor::visitUnaryExp(MiniCParser::UnaryExpContext * ctx)
 
         // 创建函数调用节点，其孩子为被调用函数名和实参，
         return create_func_call(funcname_node, paramListNode);
-    } else if(ctx->unaryOp()) {
-		// 一元运算符处理 - 取负运算
+    } else if (ctx->unaryOp()) {
+        // 一元运算符处理 - 取负运算
         ast_operator_type op = std::any_cast<ast_operator_type>(visitUnaryOp(ctx->unaryOp()));
-        ast_node* expr = std::any_cast<ast_node *>(visitUnaryExp(ctx->unaryExp()));
-        
+        ast_node * expr = std::any_cast<ast_node *>(visitUnaryExp(ctx->unaryExp()));
+
         // 创建一元取负节点，其孩子为表达式
         return create_contain_node(op, expr);
-	} else {
-        return nullptr;
+    } else if (ctx->T_LNOT()) {
+        // 逻辑非操作
+        ast_node * expr = std::any_cast<ast_node *>(visitUnaryExp(ctx->unaryExp()));
+
+        // 创建逻辑非节点
+        return create_contain_node(ast_operator_type::AST_OP_LNOT, expr);
     }
+    return nullptr;
 }
 
-std::any MiniCCSTVisitor::visitUnaryOp(MiniCParser::UnaryOpContext * ctx) 
+std::any MiniCCSTVisitor::visitUnaryOp(MiniCParser::UnaryOpContext * ctx)
 {
     return ast_operator_type::AST_OP_NEG;
 }
@@ -363,26 +377,26 @@ std::any MiniCCSTVisitor::visitPrimaryExp(MiniCParser::PrimaryExpContext * ctx)
     ast_node * node = nullptr;
 
     if (ctx->T_DIGIT()) {
-		// 无符号整型字面量
-		// 识别 primaryExp: T_DIGIT
-		
-		std::string numStr = ctx->T_DIGIT()->getText();
-		uint32_t val;
-		
-		// 根据前缀确定进制
-		if (numStr.length() >= 2 && (numStr[0] == '0' && (numStr[1] == 'x' || numStr[1] == 'X'))) {
-			// 16进制 (0x 或 0X 开头)
-			val = (uint32_t) std::stoull(numStr, nullptr, 16);
-		} else if (numStr.length() >= 1 && numStr[0] == '0' && numStr.length() > 1) {
-			// 8进制 (0 开头且长度大于1)
-			val = (uint32_t) std::stoull(numStr, nullptr, 8);
-		} else {
-			// 10进制 (包括单独的0)
-			val = (uint32_t) std::stoull(numStr, nullptr, 10);
-		}
-		
-		int64_t lineNo = (int64_t) ctx->T_DIGIT()->getSymbol()->getLine();
-		node = ast_node::New(digit_int_attr{val, lineNo});
+        // 无符号整型字面量
+        // 识别 primaryExp: T_DIGIT
+
+        std::string numStr = ctx->T_DIGIT()->getText();
+        uint32_t val;
+
+        // 根据前缀确定进制
+        if (numStr.length() >= 2 && (numStr[0] == '0' && (numStr[1] == 'x' || numStr[1] == 'X'))) {
+            // 16进制 (0x 或 0X 开头)
+            val = (uint32_t) std::stoull(numStr, nullptr, 16);
+        } else if (numStr.length() >= 1 && numStr[0] == '0' && numStr.length() > 1) {
+            // 8进制 (0 开头且长度大于1)
+            val = (uint32_t) std::stoull(numStr, nullptr, 8);
+        } else {
+            // 10进制 (包括单独的0)
+            val = (uint32_t) std::stoull(numStr, nullptr, 10);
+        }
+
+        int64_t lineNo = (int64_t) ctx->T_DIGIT()->getSymbol()->getLine();
+        node = ast_node::New(digit_int_attr{val, lineNo});
     } else if (ctx->lVal()) {
         // 具有左值的表达式
         // 识别 primaryExp: lVal
@@ -489,4 +503,180 @@ std::any MiniCCSTVisitor::visitExpressionStatement(MiniCParser::ExpressionStatem
         // 直接返回空指针，需要再把语句加入到语句块时要注意判断，空语句不要加入
         return nullptr;
     }
+}
+
+// 逻辑或表达式
+std::any MiniCCSTVisitor::visitLogicOrExp(MiniCParser::LogicOrExpContext * ctx)
+{
+    if (ctx->logicAndExp().size() == 1) {
+        return visitLogicAndExp(ctx->logicAndExp(0));
+    }
+
+    ast_node *left, *right;
+
+    for (int i = 0; i < ctx->logicAndExp().size() - 1; i++) {
+        if (i == 0) {
+            left = std::any_cast<ast_node *>(visitLogicAndExp(ctx->logicAndExp(i)));
+        }
+
+        right = std::any_cast<ast_node *>(visitLogicAndExp(ctx->logicAndExp(i + 1)));
+
+        // 创建逻辑或节点
+        left = ast_node::New(ast_operator_type::AST_OP_LOR, left, right, nullptr);
+    }
+
+    return left;
+}
+
+// 逻辑与表达式
+std::any MiniCCSTVisitor::visitLogicAndExp(MiniCParser::LogicAndExpContext * ctx)
+{
+    if (ctx->eqExp().size() == 1) {
+        return visitEqExp(ctx->eqExp(0));
+    }
+
+    ast_node *left, *right;
+
+    for (int i = 0; i < ctx->eqExp().size() - 1; i++) {
+        if (i == 0) {
+            left = std::any_cast<ast_node *>(visitEqExp(ctx->eqExp(i)));
+        }
+
+        right = std::any_cast<ast_node *>(visitEqExp(ctx->eqExp(i + 1)));
+
+        // 创建逻辑与节点
+        left = ast_node::New(ast_operator_type::AST_OP_LAND, left, right, nullptr);
+    }
+
+    return left;
+}
+
+// 相等性表达式
+std::any MiniCCSTVisitor::visitEqExp(MiniCParser::EqExpContext * ctx)
+{
+    if (ctx->relExp().size() == 1) {
+        return visitRelExp(ctx->relExp(0));
+    }
+
+    ast_node *left, *right;
+
+    for (int i = 0; i < ctx->relExp().size() - 1; i++) {
+        // 获取操作符
+        ast_operator_type op = std::any_cast<ast_operator_type>(visitEqOp(ctx->eqOp(i)));
+
+        if (i == 0) {
+            left = std::any_cast<ast_node *>(visitRelExp(ctx->relExp(i)));
+        }
+
+        right = std::any_cast<ast_node *>(visitRelExp(ctx->relExp(i + 1)));
+
+        // 创建相等比较节点
+        left = ast_node::New(op, left, right, nullptr);
+    }
+
+    return left;
+}
+
+// 关系表达式
+std::any MiniCCSTVisitor::visitRelExp(MiniCParser::RelExpContext * ctx)
+{
+    if (ctx->addExp().size() == 1) {
+        return visitAddExp(ctx->addExp(0));
+    }
+
+    ast_node *left, *right;
+
+    for (int i = 0; i < ctx->addExp().size() - 1; i++) {
+        // 获取操作符
+        ast_operator_type op = std::any_cast<ast_operator_type>(visitRelOp(ctx->relOp(i)));
+
+        if (i == 0) {
+            left = std::any_cast<ast_node *>(visitAddExp(ctx->addExp(i)));
+        }
+
+        right = std::any_cast<ast_node *>(visitAddExp(ctx->addExp(i + 1)));
+
+        // 创建关系比较节点
+        left = ast_node::New(op, left, right, nullptr);
+    }
+
+    return left;
+}
+
+// 相等运算符
+std::any MiniCCSTVisitor::visitEqOp(MiniCParser::EqOpContext * ctx)
+{
+    if (ctx->T_EQ()) {
+        return ast_operator_type::AST_OP_EQ;
+    } else if (ctx->T_NE()) {
+        return ast_operator_type::AST_OP_NE;
+    }
+    return nullptr;
+}
+
+// 关系运算符
+std::any MiniCCSTVisitor::visitRelOp(MiniCParser::RelOpContext * ctx)
+{
+    if (ctx->T_GT()) {
+        return ast_operator_type::AST_OP_GT;
+    } else if (ctx->T_LT()) {
+        return ast_operator_type::AST_OP_LT;
+    } else if (ctx->T_GE()) {
+        return ast_operator_type::AST_OP_GE;
+    } else if (ctx->T_LE()) {
+        return ast_operator_type::AST_OP_LE;
+    }
+    return nullptr;
+}
+
+// if语句
+std::any MiniCCSTVisitor::visitIfStmt(MiniCParser::IfStmtContext * ctx)
+{
+    // 条件表达式
+    auto condNode = std::any_cast<ast_node *>(visitExpr(ctx->ifStatement()->expr()));
+    
+    // 真分支语句
+    auto thenNode = std::any_cast<ast_node *>(visitStatement(ctx->ifStatement()->statement(0)));
+    
+    // 创建if节点
+    ast_node * ifNode;
+
+    // 处理可选的else部分
+    if (ctx->ifStatement()->T_ELSE()) { // 检查是否有第二个语句(else分支)
+        // 有else分支
+        auto elseNode = std::any_cast<ast_node *>(visitStatement(ctx->ifStatement()->statement(1)));
+        ifNode = ast_node::New(ast_operator_type::AST_OP_IF, condNode, thenNode, elseNode, nullptr);
+    } else {
+        // 没有else分支
+        ifNode = ast_node::New(ast_operator_type::AST_OP_IF, condNode, thenNode, nullptr);
+    }
+
+    return ifNode;
+}
+
+// while语句
+std::any MiniCCSTVisitor::visitWhileStmt(MiniCParser::WhileStmtContext * ctx)
+{
+    // 条件表达式
+    auto condNode = std::any_cast<ast_node *>(visitExpr(ctx->whileStatement()->expr()));
+
+    // 循环体语句
+    auto bodyNode = std::any_cast<ast_node *>(visitStatement(ctx->whileStatement()->statement()));
+
+    // 创建while节点
+    return ast_node::New(ast_operator_type::AST_OP_WHILE, condNode, bodyNode, nullptr);
+}
+
+// break语句
+std::any MiniCCSTVisitor::visitBreakStmt(MiniCParser::BreakStmtContext * ctx)
+{
+    // 创建break节点
+    return ast_node::New(ast_operator_type::AST_OP_BREAK, nullptr);
+}
+
+// continue语句
+std::any MiniCCSTVisitor::visitContinueStmt(MiniCParser::ContinueStmtContext * ctx)
+{
+    // 创建continue节点
+    return ast_node::New(ast_operator_type::AST_OP_CONTINUE, nullptr);
 }
