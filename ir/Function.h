@@ -34,7 +34,7 @@ public:
     /// @brief 指定函数名字、函数返回类型以及函数形式参数的构造函数
     /// @param _name
     /// @param _type
-    /// @param _param
+    /// @param _builtin 是否内置函数
     explicit Function(std::string _name, FunctionType * _type, bool _builtin = false);
 
     ///

@@ -22,7 +22,7 @@ void ScopeStack::enterScope()
 {
     // 在栈顶新加入一层，没有变量
     std::unordered_map<std::string, Value *> valueMap;
-    valueStack.emplace_back(valueMap);
+    valueStack.emplace_back(valueMap); // emplace_back 在元素末尾构建元素，而不需要先构建再插入 (push_back)
 }
 
 ///

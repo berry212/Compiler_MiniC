@@ -68,7 +68,7 @@ void Module::setCurrentFunction(Function * current)
 /// @param returnType 返回值类型
 /// @param params 形参列表
 /// @param builtin 是否内置函数
-/// @return 新建的函数对象实例
+/// @return 新建的函数对象实例，若重复定义则返回 nullptr
 Function * Module::newFunction(std::string name, Type * returnType, std::vector<FormalParam *> params, bool builtin)
 {
     // 先根据函数名查找函数，若找到则出错
@@ -121,7 +121,7 @@ Function * Module::findFunction(std::string name)
 void Module::insertFunctionDirectly(Function * func)
 {
     funcMap.insert({func->getName(), func});
-    funcVector.emplace_back(func);
+    funcVector.emplace_back(func); // funcVector作用是保持函数定义的顺序
 }
 
 /// @brief Value直接插入到符号表中的全局变量中
