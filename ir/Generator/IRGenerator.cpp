@@ -21,6 +21,7 @@
 #include <iostream>
 
 #include "AST.h"
+#include "BranchInstruction.h"
 #include "Common.h"
 #include "Function.h"
 #include "IRCode.h"
@@ -39,12 +40,31 @@
 /// @param _module 符号表
 IRGenerator::IRGenerator(ast_node * _root, Module * _module) : root(_root), module(_module)
 {
+    /* 关系运算符 */
+    ast2ir_handlers[ast_operator_type::AST_OP_GT] = &IRGenerator::ir_gt;
+    ast2ir_handlers[ast_operator_type::AST_OP_LT] = &IRGenerator::ir_lt;
+    ast2ir_handlers[ast_operator_type::AST_OP_GE] = &IRGenerator::ir_ge;
+    ast2ir_handlers[ast_operator_type::AST_OP_LE] = &IRGenerator::ir_le;
+    ast2ir_handlers[ast_operator_type::AST_OP_EQ] = &IRGenerator::ir_eq;
+    ast2ir_handlers[ast_operator_type::AST_OP_NE] = &IRGenerator::ir_ne;
+
+    /* 逻辑运算符 */
+    ast2ir_handlers[ast_operator_type::AST_OP_LAND] = &IRGenerator::ir_logical_and;
+    ast2ir_handlers[ast_operator_type::AST_OP_LOR] = &IRGenerator::ir_logical_or;
+    ast2ir_handlers[ast_operator_type::AST_OP_LNOT] = &IRGenerator::ir_logical_not;
+
+    /* 控制流语句 */
+    ast2ir_handlers[ast_operator_type::AST_OP_IF] = &IRGenerator::ir_if;
+    ast2ir_handlers[ast_operator_type::AST_OP_WHILE] = &IRGenerator::ir_while;
+    ast2ir_handlers[ast_operator_type::AST_OP_BREAK] = &IRGenerator::ir_break;
+    ast2ir_handlers[ast_operator_type::AST_OP_CONTINUE] = &IRGenerator::ir_continue;
+
     /*乘除取余取负*/
     ast2ir_handlers[ast_operator_type::AST_OP_MUL] = &IRGenerator::ir_mul;
     ast2ir_handlers[ast_operator_type::AST_OP_DIV] = &IRGenerator::ir_div;
     ast2ir_handlers[ast_operator_type::AST_OP_MOD] = &IRGenerator::ir_mod;
     ast2ir_handlers[ast_operator_type::AST_OP_NEG] = &IRGenerator::ir_neg;
-    /*新增*/
+    
     /* 叶子节点 */
     ast2ir_handlers[ast_operator_type::AST_OP_LEAF_LITERAL_UINT] = &IRGenerator::ir_leaf_node_uint;
     ast2ir_handlers[ast_operator_type::AST_OP_LEAF_VAR_ID] = &IRGenerator::ir_leaf_node_var_id;
@@ -184,7 +204,7 @@ bool IRGenerator::ir_function_define(ast_node * node)
     // 当前函数设置有效，变更为当前的函数
     module->setCurrentFunction(newFunc);
 
-    // 进入函数的作用域
+    // 进入函数的作用域 (stack 再加一层std::unordered_map<std::string, Value *>)
     module->enterScope();
 
     // 获取函数的IR代码列表，用于后面追加指令用，注意这里用的是引用传值
@@ -221,7 +241,7 @@ bool IRGenerator::ir_function_define(ast_node * node)
 
     // 这里最好设置返回值变量的初值为0，以便在没有返回值时能够返回0
 
-    // 函数内已经进入作用域，内部不再需要做变量的作用域管理
+    // 函数内已经进入作用域，内部不再需要做变量的作用域管理，即在block中不需要再创建新的作用域
     block_node->needScope = false;
 
     // 遍历block
@@ -777,6 +797,656 @@ bool IRGenerator::ir_neg(ast_node * node)
     node->blockInsts.addInst(negInst);
 
     node->val = negInst;
+
+    return true;
+}
+
+// TODO 实验6 IR生成
+// 添加以下实现
+
+/// @brief 大于关系运算符AST节点翻译成线性中间IR
+/// @param node AST节点
+/// @return 翻译是否成功，true：成功，false：失败
+bool IRGenerator::ir_gt(ast_node * node)
+{
+    ast_node * left_node = node->sons[0];
+    ast_node * right_node = node->sons[1];
+
+    // 计算左操作数
+    ast_node * left = ir_visit_ast_node(left_node);
+    if (!left) {
+        return false;
+    }
+
+    // 计算右操作数
+    ast_node * right = ir_visit_ast_node(right_node);
+    if (!right) {
+        return false;
+    }
+
+    // 创建比较指令
+    BinaryInstruction * cmpInst = new BinaryInstruction(module->getCurrentFunction(),
+                                                        IRInstOperator::IRINST_OP_GT_I,
+                                                        left->val,
+                                                        right->val,
+                                                        IntegerType::getTypeInt());
+
+    // 将指令添加到当前节点
+    node->blockInsts.addInst(left->blockInsts);
+    node->blockInsts.addInst(right->blockInsts);
+    node->blockInsts.addInst(cmpInst);
+
+    node->val = cmpInst;
+    return true;
+}
+
+/// @brief 小于关系运算符AST节点翻译成线性中间IR
+/// @param node AST节点
+/// @return 翻译是否成功，true：成功，false：失败
+bool IRGenerator::ir_lt(ast_node * node)
+{
+    ast_node * left_node = node->sons[0];
+    ast_node * right_node = node->sons[1];
+
+    // 计算左操作数
+    ast_node * left = ir_visit_ast_node(left_node);
+    if (!left) {
+        return false;
+    }
+
+    // 计算右操作数
+    ast_node * right = ir_visit_ast_node(right_node);
+    if (!right) {
+        return false;
+    }
+
+    // 创建比较指令
+    BinaryInstruction * cmpInst = new BinaryInstruction(module->getCurrentFunction(),
+                                                        IRInstOperator::IRINST_OP_LT_I,
+                                                        left->val,
+                                                        right->val,
+                                                        IntegerType::getTypeInt());
+
+    // 将指令添加到当前节点
+    node->blockInsts.addInst(left->blockInsts);
+    node->blockInsts.addInst(right->blockInsts);
+    node->blockInsts.addInst(cmpInst);
+
+    node->val = cmpInst;
+    return true;
+}
+
+/// @brief 大于等于关系运算符AST节点翻译成线性中间IR
+/// @param node AST节点
+/// @return 翻译是否成功，true：成功，false：失败
+bool IRGenerator::ir_ge(ast_node * node)
+{
+    ast_node * left_node = node->sons[0];
+    ast_node * right_node = node->sons[1];
+
+    // 计算左操作数
+    ast_node * left = ir_visit_ast_node(left_node);
+    if (!left) {
+        return false;
+    }
+
+    // 计算右操作数
+    ast_node * right = ir_visit_ast_node(right_node);
+    if (!right) {
+        return false;
+    }
+
+    // 创建比较指令
+    BinaryInstruction * cmpInst = new BinaryInstruction(module->getCurrentFunction(),
+                                                        IRInstOperator::IRINST_OP_GE_I,
+                                                        left->val,
+                                                        right->val,
+                                                        IntegerType::getTypeInt());
+
+    // 将指令添加到当前节点
+    node->blockInsts.addInst(left->blockInsts);
+    node->blockInsts.addInst(right->blockInsts);
+    node->blockInsts.addInst(cmpInst);
+
+    node->val = cmpInst;
+    return true;
+}
+
+/// @brief 小于等于关系运算符AST节点翻译成线性中间IR
+/// @param node AST节点
+/// @return 翻译是否成功，true：成功，false：失败
+bool IRGenerator::ir_le(ast_node * node)
+{
+    ast_node * left_node = node->sons[0];
+    ast_node * right_node = node->sons[1];
+
+    // 计算左操作数
+    ast_node * left = ir_visit_ast_node(left_node);
+    if (!left) {
+        return false;
+    }
+
+    // 计算右操作数
+    ast_node * right = ir_visit_ast_node(right_node);
+    if (!right) {
+        return false;
+    }
+
+    // 创建比较指令
+    BinaryInstruction * cmpInst = new BinaryInstruction(module->getCurrentFunction(),
+                                                        IRInstOperator::IRINST_OP_LE_I,
+                                                        left->val,
+                                                        right->val,
+                                                        IntegerType::getTypeInt());
+
+    // 将指令添加到当前节点
+    node->blockInsts.addInst(left->blockInsts);
+    node->blockInsts.addInst(right->blockInsts);
+    node->blockInsts.addInst(cmpInst);
+
+    node->val = cmpInst;
+    return true;
+}
+
+/// @brief 等于关系运算符AST节点翻译成线性中间IR
+/// @param node AST节点
+/// @return 翻译是否成功，true：成功，false：失败
+bool IRGenerator::ir_eq(ast_node * node)
+{
+    ast_node * left_node = node->sons[0];
+    ast_node * right_node = node->sons[1];
+
+    // 计算左操作数
+    ast_node * left = ir_visit_ast_node(left_node);
+    if (!left) {
+        return false;
+    }
+
+    // 计算右操作数
+    ast_node * right = ir_visit_ast_node(right_node);
+    if (!right) {
+        return false;
+    }
+
+    // 创建比较指令
+    BinaryInstruction * cmpInst = new BinaryInstruction(module->getCurrentFunction(),
+                                                        IRInstOperator::IRINST_OP_EQ_I,
+                                                        left->val,
+                                                        right->val,
+                                                        IntegerType::getTypeInt());
+
+    // 将指令添加到当前节点
+    node->blockInsts.addInst(left->blockInsts);
+    node->blockInsts.addInst(right->blockInsts);
+    node->blockInsts.addInst(cmpInst);
+
+    node->val = cmpInst;
+    return true;
+}
+
+/// @brief 不等于关系运算符AST节点翻译成线性中间IR
+/// @param node AST节点
+/// @return 翻译是否成功，true：成功，false：失败
+bool IRGenerator::ir_ne(ast_node * node)
+{
+    ast_node * left_node = node->sons[0];
+    ast_node * right_node = node->sons[1];
+
+    // 计算左操作数
+    ast_node * left = ir_visit_ast_node(left_node);
+    if (!left) {
+        return false;
+    }
+
+    // 计算右操作数
+    ast_node * right = ir_visit_ast_node(right_node);
+    if (!right) {
+        return false;
+    }
+
+    // 创建比较指令
+    BinaryInstruction * cmpInst = new BinaryInstruction(module->getCurrentFunction(),
+                                                        IRInstOperator::IRINST_OP_NE_I,
+                                                        left->val,
+                                                        right->val,
+                                                        IntegerType::getTypeInt());
+
+    // 将指令添加到当前节点
+    node->blockInsts.addInst(left->blockInsts);
+    node->blockInsts.addInst(right->blockInsts);
+    node->blockInsts.addInst(cmpInst);
+
+    node->val = cmpInst;
+    return true;
+}
+
+/// @brief 将表达式值转换为布尔值(非0为真)
+/// @param expr_node 表达式节点
+/// @return 处理后的节点
+ast_node * IRGenerator::ir_convert_to_bool(ast_node * expr_node)
+{
+    if (!expr_node) {
+        return nullptr;
+    }
+
+    // 获取当前函数
+    Function * currentFunc = module->getCurrentFunction();
+
+    // 创建0常量
+    ConstInt * zero = module->newConstInt(0);
+
+    // 非0为真：创建 expr != 0 的比较指令
+    BinaryInstruction * boolInst = new BinaryInstruction(currentFunc,
+                                                         IRInstOperator::IRINST_OP_NE_I,
+                                                         expr_node->val,
+                                                         zero,
+                                                         IntegerType::getTypeInt());
+
+    // 将指令添加到表达式的指令块中
+    expr_node->blockInsts.addInst(boolInst);
+
+    // 更新值为布尔结果
+    expr_node->val = boolInst;
+
+    return expr_node;
+}
+
+/// @brief 逻辑与AST节点翻译成线性中间IR (短路求值)
+/// @param node AST节点
+/// @return 翻译是否成功，true：成功，false：失败
+bool IRGenerator::ir_logical_and(ast_node * node)
+{
+    Function * currentFunc = module->getCurrentFunction();
+
+    // 创建标签：右操作数执行块、AND结果为假的块、AND结束块
+    LabelInstruction * rightLabel = new LabelInstruction(currentFunc);
+    LabelInstruction * falseLabel = new LabelInstruction(currentFunc);
+    LabelInstruction * endLabel = new LabelInstruction(currentFunc);
+
+    // 计算左操作数
+    ast_node * left_node = node->sons[0];
+    ast_node * left = ir_visit_ast_node(left_node);
+    if (!left) {
+        return false;
+    }
+
+    // 转换为布尔值
+    left = ir_convert_to_bool(left);
+
+    // 左操作数判断：如果左操作数为假，直接跳转到假标签
+    BranchInstruction * branchFalse = new BranchInstruction(currentFunc,
+                                                            left->val,
+                                                            rightLabel,  // true
+                                                            falseLabel); // false
+
+    // 计算右操作数
+    ast_node * right_node = node->sons[1];
+    ast_node * right = ir_visit_ast_node(right_node);
+    if (!right) {
+        return false;
+    }
+
+    // 转换为布尔值
+    right = ir_convert_to_bool(right);
+
+    // 右操作数判断：无论右操作数真假，都需要跳转到结束点
+    BranchInstruction * branchEnd = new BranchInstruction(currentFunc,
+                                                          right->val,
+                                                          endLabel,    // true
+                                                          falseLabel); // false
+
+    // 创建结果变量 (phi指令)
+    LocalVariable * resultVar = static_cast<LocalVariable *>(module->newVarValue(IntegerType::getTypeInt()));
+
+    // 对于假结果，设置为0
+    ConstInt * zeroVal = module->newConstInt(0);
+    MoveInstruction * setFalse = new MoveInstruction(currentFunc, resultVar, zeroVal);
+
+    // 对于真结果(从右操作数过来)，设置为1
+    ConstInt * oneVal = module->newConstInt(1);
+    MoveInstruction * setTrue = new MoveInstruction(currentFunc, resultVar, oneVal);
+
+    // 组装指令块
+    node->blockInsts.addInst(left->blockInsts);
+    node->blockInsts.addInst(branchFalse);
+
+    // 右操作数标签
+    node->blockInsts.addInst(rightLabel);
+    node->blockInsts.addInst(right->blockInsts);
+    node->blockInsts.addInst(branchEnd);
+
+    // 假结果标签
+    node->blockInsts.addInst(falseLabel);
+    node->blockInsts.addInst(setFalse);
+    node->blockInsts.addInst(new GotoInstruction(currentFunc, endLabel));
+
+    // 结束标签 - 为真的情况
+    node->blockInsts.addInst(endLabel);
+    node->blockInsts.addInst(setTrue);
+
+    // 设置结果
+    node->val = resultVar;
+
+    return true;
+}
+
+/// @brief 逻辑或AST节点翻译成线性中间IR (短路求值)
+/// @param node AST节点
+/// @return 翻译是否成功，true：成功，false：失败
+bool IRGenerator::ir_logical_or(ast_node * node)
+{
+    Function * currentFunc = module->getCurrentFunction();
+
+    // 创建标签：右操作数执行块、OR结果为真的块、OR结束块
+    LabelInstruction * rightLabel = new LabelInstruction(currentFunc);
+    LabelInstruction * trueLabel = new LabelInstruction(currentFunc);
+    LabelInstruction * endLabel = new LabelInstruction(currentFunc);
+
+    // 计算左操作数
+    ast_node * left_node = node->sons[0];
+    ast_node * left = ir_visit_ast_node(left_node);
+    if (!left) {
+        return false;
+    }
+
+    // 转换为布尔值
+    left = ir_convert_to_bool(left);
+
+    // 左操作数判断：如果左操作数为真，直接跳转到真标签
+    BranchInstruction * branchTrue = new BranchInstruction(currentFunc,
+                                                           left->val,
+                                                           trueLabel,   // true
+                                                           rightLabel); // false
+
+    // 计算右操作数
+    ast_node * right_node = node->sons[1];
+    ast_node * right = ir_visit_ast_node(right_node);
+    if (!right) {
+        return false;
+    }
+
+    // 转换为布尔值
+    right = ir_convert_to_bool(right);
+
+    // 右操作数判断：无论右操作数真假，都需要跳转到各自的标签
+    BranchInstruction * branchEnd = new BranchInstruction(currentFunc,
+                                                          right->val,
+                                                          trueLabel, // true
+                                                          endLabel); // false
+
+    // 创建结果变量
+    LocalVariable * resultVar = static_cast<LocalVariable *>(module->newVarValue(IntegerType::getTypeInt()));
+
+    // 对于假结果，设置为0
+    ConstInt * zeroVal = module->newConstInt(0);
+    MoveInstruction * setFalse = new MoveInstruction(currentFunc, resultVar, zeroVal);
+
+    // 对于真结果，设置为1
+    ConstInt * oneVal = module->newConstInt(1);
+    MoveInstruction * setTrue = new MoveInstruction(currentFunc, resultVar, oneVal);
+
+    // 组装指令块
+    node->blockInsts.addInst(left->blockInsts);
+    node->blockInsts.addInst(branchTrue);
+
+    // 右操作数标签
+    node->blockInsts.addInst(rightLabel);
+    node->blockInsts.addInst(right->blockInsts);
+    node->blockInsts.addInst(branchEnd);
+
+    // 真结果标签
+    node->blockInsts.addInst(trueLabel);
+    node->blockInsts.addInst(setTrue);
+    node->blockInsts.addInst(new GotoInstruction(currentFunc, endLabel));
+
+    // 结束标签 - 为假的情况
+    node->blockInsts.addInst(endLabel);
+    node->blockInsts.addInst(setFalse);
+
+    // 设置结果
+    node->val = resultVar;
+
+    return true;
+}
+
+/// @brief 逻辑非AST节点翻译成线性中间IR
+/// @param node AST节点
+/// @return 翻译是否成功，true：成功，false：失败
+bool IRGenerator::ir_logical_not(ast_node * node)
+{
+    // 计算操作数
+    ast_node * operand_node = node->sons[0];
+    ast_node * operand = ir_visit_ast_node(operand_node);
+    if (!operand) {
+        return false;
+    }
+
+    // 转换为布尔值
+    operand = ir_convert_to_bool(operand);
+
+    // 获取当前函数
+    Function * currentFunc = module->getCurrentFunction();
+
+    // 创建0常量和1常量
+    ConstInt * zeroVal = module->newConstInt(0);
+    ConstInt * oneVal = module->newConstInt(1);
+
+    // 创建真假结果标签
+    LabelInstruction * trueLabel = new LabelInstruction(currentFunc);
+    LabelInstruction * falseLabel = new LabelInstruction(currentFunc);
+    LabelInstruction * endLabel = new LabelInstruction(currentFunc);
+
+    // 结果变量
+    LocalVariable * resultVar = static_cast<LocalVariable *>(module->newVarValue(IntegerType::getTypeInt()));
+
+    // 如果操作数为真，跳转到假标签；如果操作数为假，跳转到真标签
+    // 这里颠倒了标签，实现了逻辑非的效果
+    BranchInstruction * branch = new BranchInstruction(currentFunc,
+                                                       operand->val,
+                                                       falseLabel, // 如果为真，跳到假标签
+                                                       trueLabel); // 如果为假，跳到真标签
+
+    // 真结果：设置结果为1
+    MoveInstruction * setTrue = new MoveInstruction(currentFunc, resultVar, oneVal);
+
+    // 假结果：设置结果为0
+    MoveInstruction * setFalse = new MoveInstruction(currentFunc, resultVar, zeroVal);
+
+    // 组装指令块
+    node->blockInsts.addInst(operand->blockInsts);
+    node->blockInsts.addInst(branch);
+
+    // 真标签 - 设置为1
+    node->blockInsts.addInst(trueLabel);
+    node->blockInsts.addInst(setTrue);
+    node->blockInsts.addInst(new GotoInstruction(currentFunc, endLabel));
+
+    // 假标签 - 设置为0
+    node->blockInsts.addInst(falseLabel);
+    node->blockInsts.addInst(setFalse);
+
+    // 结束标签
+    node->blockInsts.addInst(endLabel);
+
+    // 设置结果
+    node->val = resultVar;
+
+    return true;
+}
+
+/// @brief if语句AST节点翻译成线性中间IR
+/// @param node AST节点
+/// @return 翻译是否成功，true：成功，false：失败
+bool IRGenerator::ir_if(ast_node * node)
+{
+    Function * currentFunc = module->getCurrentFunction();
+
+    // 创建if语句的标签：then块、else块(如果有)、if结束块
+    LabelInstruction * thenLabel = new LabelInstruction(currentFunc);
+    LabelInstruction * elseLabel = new LabelInstruction(currentFunc);
+    LabelInstruction * endLabel = new LabelInstruction(currentFunc);
+
+    // 计算条件表达式
+    ast_node * cond_node = node->sons[0];
+    ast_node * cond = ir_visit_ast_node(cond_node);
+    if (!cond) {
+        return false;
+    }
+
+    // 转换为布尔值
+    cond = ir_convert_to_bool(cond);
+
+    // 条件判断：如果条件为真，跳转到then块；否则跳转到else块
+    BranchInstruction * branch = new BranchInstruction(currentFunc,
+                                                       cond->val,
+                                                       thenLabel,  // true
+                                                       elseLabel); // false
+
+    // 计算then块
+    ast_node * then_node = node->sons[1];
+    ast_node * then_block = ir_visit_ast_node(then_node);
+    if (!then_block) {
+        return false;
+    }
+
+    // 判断是否有else块
+    bool has_else = node->sons.size() > 2;
+    ast_node * else_block = nullptr;
+
+    // 计算else块
+    if (has_else) {
+        ast_node * else_node = node->sons[2];
+        else_block = ir_visit_ast_node(else_node);
+        if (!else_block) {
+            return false;
+        }
+    }
+
+    // 组装指令块
+    node->blockInsts.addInst(cond->blockInsts);
+    node->blockInsts.addInst(branch);
+
+    // then块
+    node->blockInsts.addInst(thenLabel);
+    node->blockInsts.addInst(then_block->blockInsts);
+    node->blockInsts.addInst(new GotoInstruction(currentFunc, endLabel));
+
+    // else块
+    node->blockInsts.addInst(elseLabel);
+    if (has_else) {
+        node->blockInsts.addInst(else_block->blockInsts);
+    }
+
+    // 结束标签
+    node->blockInsts.addInst(endLabel);
+
+    return true;
+}
+
+/// @brief while语句AST节点翻译成线性中间IR
+/// @param node AST节点
+/// @return 翻译是否成功，true：成功，false：失败
+bool IRGenerator::ir_while(ast_node * node)
+{
+    Function * currentFunc = module->getCurrentFunction();
+
+    // 创建while循环的标签：条件块、循环体块、循环结束块
+    LabelInstruction * condLabel = new LabelInstruction(currentFunc);
+    LabelInstruction * bodyLabel = new LabelInstruction(currentFunc);
+    LabelInstruction * endLabel = new LabelInstruction(currentFunc);
+
+    // 保存循环的开始和结束标签，用于break和continue语句
+    LabelInstruction * oldContinueTarget = currentFunc->getContinueTarget();
+    LabelInstruction * oldBreakTarget = currentFunc->getBreakTarget();
+
+    // 设置当前循环的标签
+    currentFunc->setContinueTarget(condLabel); // continue跳转到条件判断
+    currentFunc->setBreakTarget(endLabel);     // break跳转到循环结束
+
+    // 先跳转到条件判断
+    node->blockInsts.addInst(new GotoInstruction(currentFunc, condLabel));
+
+    // 条件判断块
+    node->blockInsts.addInst(condLabel);
+
+    // 计算条件表达式
+    ast_node * cond_node = node->sons[0];
+    ast_node * cond = ir_visit_ast_node(cond_node);
+    if (!cond) {
+        return false;
+    }
+
+    // 转换为布尔值
+    cond = ir_convert_to_bool(cond);
+
+    // 条件判断：如果条件为真，跳转到循环体；否则跳转到循环结束
+    BranchInstruction * branch = new BranchInstruction(currentFunc,
+                                                       cond->val,
+                                                       bodyLabel, // true
+                                                       endLabel); // false
+    node->blockInsts.addInst(cond->blockInsts);
+    node->blockInsts.addInst(branch);
+
+    // 循环体
+    node->blockInsts.addInst(bodyLabel);
+    ast_node * body_node = node->sons[1];
+    ast_node * body = ir_visit_ast_node(body_node);
+    if (!body) {
+        return false;
+    }
+    node->blockInsts.addInst(body->blockInsts);
+
+    // 循环体结束后跳回条件判断
+    node->blockInsts.addInst(new GotoInstruction(currentFunc, condLabel));
+
+    // 循环结束标签
+    node->blockInsts.addInst(endLabel);
+
+    // 恢复之前的break和continue标签
+    currentFunc->setContinueTarget(oldContinueTarget);
+    currentFunc->setBreakTarget(oldBreakTarget);
+
+    return true;
+}
+
+/// @brief break语句AST节点翻译成线性中间IR
+/// @param node AST节点
+/// @return 翻译是否成功，true：成功，false：失败
+bool IRGenerator::ir_break(ast_node * node)
+{
+    Function * currentFunc = module->getCurrentFunction();
+
+    // 获取当前循环的break目标标签
+    LabelInstruction * breakTarget = currentFunc->getBreakTarget();
+
+    if (!breakTarget) {
+        minic_log(LOG_ERROR, "break语句必须在循环内部使用");
+        return false;
+    }
+
+    // 创建跳转到break目标的指令
+    node->blockInsts.addInst(new GotoInstruction(currentFunc, breakTarget));
+
+    return true;
+}
+
+/// @brief continue语句AST节点翻译成线性中间IR
+/// @param node AST节点
+/// @return 翻译是否成功，true：成功，false：失败
+bool IRGenerator::ir_continue(ast_node * node)
+{
+    Function * currentFunc = module->getCurrentFunction();
+
+    // 获取当前循环的continue目标标签
+    LabelInstruction * continueTarget = currentFunc->getContinueTarget();
+
+    if (!continueTarget) {
+        minic_log(LOG_ERROR, "continue语句必须在循环内部使用");
+        return false;
+    }
+
+    // 创建跳转到continue目标的指令
+    node->blockInsts.addInst(new GotoInstruction(currentFunc, continueTarget));
 
     return true;
 }

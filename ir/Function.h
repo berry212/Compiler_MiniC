@@ -24,7 +24,7 @@
 #include "LocalVariable.h"
 #include "MemVariable.h"
 #include "IRCode.h"
-
+#include "LabelInstruction.h"
 ///
 /// @brief 描述函数信息的类，是全局静态存储，其Value的类型为FunctionType
 ///
@@ -42,6 +42,34 @@ public:
     /// @brief 释放函数占用的内存和IR指令代码
     /// @brief 注意：IR指令代码并未释放，需要手动释放
     ~Function();
+
+    /// @brief 获取当前循环的continue目标标签
+    /// @return continue目标标签
+    LabelInstruction * getContinueTarget() const
+    {
+        return continueTarget;
+    }
+
+    /// @brief 设置当前循环的continue目标标签
+    /// @param label continue目标标签
+    void setContinueTarget(LabelInstruction * label)
+    {
+        continueTarget = label;
+    }
+
+    /// @brief 获取当前循环的break目标标签
+    /// @return break目标标签
+    LabelInstruction * getBreakTarget() const
+    {
+        return breakTarget;
+    }
+
+    /// @brief 设置当前循环的break目标标签
+    /// @param label break目标标签
+    void setBreakTarget(LabelInstruction * label)
+    {
+        breakTarget = label;
+    }
 
     /// @brief 获取函数返回类型
     /// @return 返回类型
@@ -171,6 +199,12 @@ public:
     void realArgCountReset();
 
 private:
+    /// @brief 当前循环的continue目标标签
+    LabelInstruction * continueTarget = nullptr;
+
+    /// @brief 当前循环的break目标标签
+    LabelInstruction * breakTarget = nullptr;
+    
     ///
     /// @brief 函数的返回值类型，有点冗余，可删除，直接从type中取得即可
     ///

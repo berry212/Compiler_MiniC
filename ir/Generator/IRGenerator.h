@@ -20,6 +20,7 @@
 
 #include "AST.h"
 #include "Module.h"
+#include "LabelInstruction.h"
 
 /// @brief AST遍历产生线性IR类
 class IRGenerator {
@@ -143,12 +144,33 @@ protected:
     /// @return 翻译是否成功，true：成功，false：失败
     bool ir_neg(ast_node * node);
 
+    // 关系运算符
+    bool ir_gt(ast_node * node);
+    bool ir_lt(ast_node * node);
+    bool ir_ge(ast_node * node);
+    bool ir_le(ast_node * node);
+    bool ir_eq(ast_node * node);
+    bool ir_ne(ast_node * node);
+
+    // 逻辑运算符
+    bool ir_logical_and(ast_node * node);
+    bool ir_logical_or(ast_node * node);
+    bool ir_logical_not(ast_node * node);
+
+    // 控制流语句
+    bool ir_if(ast_node * node);
+    bool ir_while(ast_node * node);
+    bool ir_break(ast_node * node);
+    bool ir_continue(ast_node * node);
+
+    // 辅助方法 - 将值转换为布尔值(非0为真)
+    ast_node * ir_convert_to_bool(ast_node * expr_node);
+
     /// @brief AST的节点操作函数
     typedef bool (IRGenerator::*ast2ir_handler_t)(ast_node *);
 
     /// @brief AST节点运算符与动作函数关联的映射表
     std::unordered_map<ast_operator_type, ast2ir_handler_t> ast2ir_handlers;
-
 private:
     /// @brief 抽象语法树的根
     ast_node * root;
