@@ -218,4 +218,14 @@ public:
     /*新增指令*/
     void mul(int dst_reg_no, int src1_reg_no, int src2_reg_no);
     void idiv(int dst_reg_no, int src1_reg_no, int src2_reg_no);
+    
+    // 条件跳转指令，可根据条件跳转到指定标签
+    void branch(std::string cond, std::string label);
+
+    // 条件赋值指令，如 moveq，movlt等
+    void mov_cond(std::string cond, int dst_reg_no, int value);
+
+    // 比较指令
+    void cmp(int reg1_no, int reg2_no);
+    void cmp_imm(int reg_no, int imm);
 };

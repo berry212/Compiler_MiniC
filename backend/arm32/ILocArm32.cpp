@@ -581,3 +581,31 @@ void ILocArm32::idiv(int dst_reg_no, int src1_reg_no, int src2_reg_no)
 
     emit("sdiv", dst_reg_name, src1_reg_name, src2_reg_name);
 }
+
+// 条件跳转指令
+void ILocArm32::branch(std::string cond, std::string label)
+{
+    emit("b" + cond, label);
+}
+
+// 条件赋值指令
+void ILocArm32::mov_cond(std::string cond, int dst_reg_no, int value)
+{
+    std::string dst_reg_name = PlatformArm32::regName[dst_reg_no];
+    emit("mov" + cond, dst_reg_name, "#" + std::to_string(value));
+}
+
+// 寄存器比较指令
+void ILocArm32::cmp(int reg1_no, int reg2_no)
+{
+    std::string reg1_name = PlatformArm32::regName[reg1_no];
+    std::string reg2_name = PlatformArm32::regName[reg2_no];
+    emit("cmp", reg1_name, reg2_name);
+}
+
+// 寄存器和立即数比较指令
+void ILocArm32::cmp_imm(int reg_no, int imm)
+{
+    std::string reg_name = PlatformArm32::regName[reg_no];
+    emit("cmp", reg_name, "#" + std::to_string(imm));
+}

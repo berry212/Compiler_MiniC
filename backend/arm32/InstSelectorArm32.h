@@ -95,7 +95,22 @@ protected:
     void translate_mul_int32(Instruction * inst);
     void translate_div_int32(Instruction * inst);
     void translate_mod_int32(Instruction * inst);
-    
+
+    // 条件分支指令
+    void translate_branch(Instruction * inst);
+
+    // 条件运算指令
+    void translate_cmp_int32(Instruction * inst, const string & cond);
+    void translate_gt_int32(Instruction * inst);
+    void translate_lt_int32(Instruction * inst);
+    void translate_ge_int32(Instruction * inst);
+    void translate_le_int32(Instruction * inst);
+    void translate_eq_int32(Instruction * inst);
+    void translate_ne_int32(Instruction * inst);
+
+    // 辅助函数 - 生成条件判断代码
+    void gen_condition_code(Instruction * inst, const string & cond);
+
     ///
     /// @brief 输出IR指令
     ///
