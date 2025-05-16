@@ -3,5 +3,5 @@
 
 void BranchInstruction::toString(std::string& str)
 {
-    str = "br " + condition->getIRName() + ", " + trueLabel->getIRName() + ", " + falseLabel->getIRName();
+    str = "bc " + condition->getIRName() + ", " + trueLabel->getIRName() + ", " + falseLabel->getIRName();
 }

@@ -14,6 +14,7 @@
 /// </table>
 ///
 
+#include <cstdint>
 #include <cstdlib>
 #include <string>
 
@@ -286,25 +287,26 @@ void Function::renameIR()
         return;
     }
 
-    int32_t nameIndex = 0;
-
+    int32_t localVarIndex = 0;
+    int32_t tmpVarIndex = 0;
+	int32_t labelIndex = 0;
     // 形式参数重命名
     for (auto & param: this->params) {
-        param->setIRName(IR_TEMP_VARNAME_PREFIX + std::to_string(nameIndex++));
+        param->setIRName(IR_TEMP_VARNAME_PREFIX + std::to_string(tmpVarIndex++));
     }
 
     // 局部变量重命名
     for (auto & var: this->varsVector) {
 
-        var->setIRName(IR_LOCAL_VARNAME_PREFIX + std::to_string(nameIndex++));
+        var->setIRName(IR_LOCAL_VARNAME_PREFIX + std::to_string(localVarIndex++));
     }
 
     // 遍历所有的指令进行命名
     for (auto inst: this->getInterCode().getInsts()) {
         if (inst->getOp() == IRInstOperator::IRINST_OP_LABEL) {
-            inst->setIRName(IR_LABEL_PREFIX + std::to_string(nameIndex++));
+            inst->setIRName(IR_LABEL_PREFIX + std::to_string(labelIndex++));
         } else if (inst->hasResultValue()) {
-            inst->setIRName(IR_TEMP_VARNAME_PREFIX + std::to_string(nameIndex++));
+            inst->setIRName(IR_TEMP_VARNAME_PREFIX + std::to_string(tmpVarIndex++));
         }
     }
 }

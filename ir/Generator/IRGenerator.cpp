@@ -64,7 +64,7 @@ IRGenerator::IRGenerator(ast_node * _root, Module * _module) : root(_root), modu
     ast2ir_handlers[ast_operator_type::AST_OP_DIV] = &IRGenerator::ir_div;
     ast2ir_handlers[ast_operator_type::AST_OP_MOD] = &IRGenerator::ir_mod;
     ast2ir_handlers[ast_operator_type::AST_OP_NEG] = &IRGenerator::ir_neg;
-    
+
     /* 叶子节点 */
     ast2ir_handlers[ast_operator_type::AST_OP_LEAF_LITERAL_UINT] = &IRGenerator::ir_leaf_node_uint;
     ast2ir_handlers[ast_operator_type::AST_OP_LEAF_VAR_ID] = &IRGenerator::ir_leaf_node_var_id;
@@ -829,7 +829,7 @@ bool IRGenerator::ir_gt(ast_node * node)
                                                         IRInstOperator::IRINST_OP_GT_I,
                                                         left->val,
                                                         right->val,
-                                                        IntegerType::getTypeInt());
+                                                        IntegerType::getTypeBool());
 
     // 将指令添加到当前节点
     node->blockInsts.addInst(left->blockInsts);
@@ -865,7 +865,7 @@ bool IRGenerator::ir_lt(ast_node * node)
                                                         IRInstOperator::IRINST_OP_LT_I,
                                                         left->val,
                                                         right->val,
-                                                        IntegerType::getTypeInt());
+                                                        IntegerType::getTypeBool());
 
     // 将指令添加到当前节点
     node->blockInsts.addInst(left->blockInsts);
@@ -901,7 +901,7 @@ bool IRGenerator::ir_ge(ast_node * node)
                                                         IRInstOperator::IRINST_OP_GE_I,
                                                         left->val,
                                                         right->val,
-                                                        IntegerType::getTypeInt());
+                                                        IntegerType::getTypeBool());
 
     // 将指令添加到当前节点
     node->blockInsts.addInst(left->blockInsts);
@@ -937,7 +937,7 @@ bool IRGenerator::ir_le(ast_node * node)
                                                         IRInstOperator::IRINST_OP_LE_I,
                                                         left->val,
                                                         right->val,
-                                                        IntegerType::getTypeInt());
+                                                        IntegerType::getTypeBool());
 
     // 将指令添加到当前节点
     node->blockInsts.addInst(left->blockInsts);
@@ -973,7 +973,7 @@ bool IRGenerator::ir_eq(ast_node * node)
                                                         IRInstOperator::IRINST_OP_EQ_I,
                                                         left->val,
                                                         right->val,
-                                                        IntegerType::getTypeInt());
+                                                        IntegerType::getTypeBool());
 
     // 将指令添加到当前节点
     node->blockInsts.addInst(left->blockInsts);
@@ -1009,7 +1009,7 @@ bool IRGenerator::ir_ne(ast_node * node)
                                                         IRInstOperator::IRINST_OP_NE_I,
                                                         left->val,
                                                         right->val,
-                                                        IntegerType::getTypeInt());
+                                                        IntegerType::getTypeBool());
 
     // 将指令添加到当前节点
     node->blockInsts.addInst(left->blockInsts);
@@ -1051,7 +1051,7 @@ ast_node * IRGenerator::ir_convert_to_bool(ast_node * expr_node)
     return expr_node;
 }
 
-/// @brief 逻辑与AST节点翻译成线性中间IR (短路求值)
+/// @brief 逻辑与AST节点翻译成线性中间IR (短路求值) 逻辑运算结果只有0 1 保存在 node->val
 /// @param node AST节点
 /// @return 翻译是否成功，true：成功，false：失败
 bool IRGenerator::ir_logical_and(ast_node * node)
@@ -1060,6 +1060,7 @@ bool IRGenerator::ir_logical_and(ast_node * node)
 
     // 创建标签：右操作数执行块、AND结果为假的块、AND结束块
     LabelInstruction * rightLabel = new LabelInstruction(currentFunc);
+    LabelInstruction * trueLabel = new LabelInstruction(currentFunc);
     LabelInstruction * falseLabel = new LabelInstruction(currentFunc);
     LabelInstruction * endLabel = new LabelInstruction(currentFunc);
 
@@ -1070,14 +1071,11 @@ bool IRGenerator::ir_logical_and(ast_node * node)
         return false;
     }
 
-    // 转换为布尔值
-    left = ir_convert_to_bool(left);
-
     // 左操作数判断：如果左操作数为假，直接跳转到假标签
-    BranchInstruction * branchFalse = new BranchInstruction(currentFunc,
-                                                            left->val,
-                                                            rightLabel,  // true
-                                                            falseLabel); // false
+    BranchInstruction * leftBranch = new BranchInstruction(currentFunc,
+                                                           left->val,
+                                                           rightLabel, // 右操作数标签
+                                                           falseLabel);
 
     // 计算右操作数
     ast_node * right_node = node->sons[1];
@@ -1086,14 +1084,11 @@ bool IRGenerator::ir_logical_and(ast_node * node)
         return false;
     }
 
-    // 转换为布尔值
-    right = ir_convert_to_bool(right);
-
     // 右操作数判断：无论右操作数真假，都需要跳转到结束点
-    BranchInstruction * branchEnd = new BranchInstruction(currentFunc,
-                                                          right->val,
-                                                          endLabel,    // true
-                                                          falseLabel); // false
+    BranchInstruction * rightBranch = new BranchInstruction(currentFunc,
+                                                            right->val,
+                                                            trueLabel,   // true
+                                                            falseLabel); // false
 
     // 创建结果变量 (phi指令)
     LocalVariable * resultVar = static_cast<LocalVariable *>(module->newVarValue(IntegerType::getTypeInt()));
@@ -1108,12 +1103,12 @@ bool IRGenerator::ir_logical_and(ast_node * node)
 
     // 组装指令块
     node->blockInsts.addInst(left->blockInsts);
-    node->blockInsts.addInst(branchFalse);
+    node->blockInsts.addInst(leftBranch); // bc left, rightLabel, falseLabel
 
     // 右操作数标签
     node->blockInsts.addInst(rightLabel);
     node->blockInsts.addInst(right->blockInsts);
-    node->blockInsts.addInst(branchEnd);
+    node->blockInsts.addInst(rightBranch); // bc right, trueLabel, falseLabel
 
     // 假结果标签
     node->blockInsts.addInst(falseLabel);
@@ -1121,8 +1116,9 @@ bool IRGenerator::ir_logical_and(ast_node * node)
     node->blockInsts.addInst(new GotoInstruction(currentFunc, endLabel));
 
     // 结束标签 - 为真的情况
-    node->blockInsts.addInst(endLabel);
+    node->blockInsts.addInst(trueLabel);
     node->blockInsts.addInst(setTrue);
+    node->blockInsts.addInst(endLabel);
 
     // 设置结果
     node->val = resultVar;
@@ -1141,6 +1137,7 @@ bool IRGenerator::ir_logical_or(ast_node * node)
     LabelInstruction * rightLabel = new LabelInstruction(currentFunc);
     LabelInstruction * trueLabel = new LabelInstruction(currentFunc);
     LabelInstruction * endLabel = new LabelInstruction(currentFunc);
+    LabelInstruction * falseLabel = new LabelInstruction(currentFunc);
 
     // 计算左操作数
     ast_node * left_node = node->sons[0];
@@ -1148,9 +1145,6 @@ bool IRGenerator::ir_logical_or(ast_node * node)
     if (!left) {
         return false;
     }
-
-    // 转换为布尔值
-    left = ir_convert_to_bool(left);
 
     // 左操作数判断：如果左操作数为真，直接跳转到真标签
     BranchInstruction * branchTrue = new BranchInstruction(currentFunc,
@@ -1165,14 +1159,11 @@ bool IRGenerator::ir_logical_or(ast_node * node)
         return false;
     }
 
-    // 转换为布尔值
-    right = ir_convert_to_bool(right);
-
     // 右操作数判断：无论右操作数真假，都需要跳转到各自的标签
     BranchInstruction * branchEnd = new BranchInstruction(currentFunc,
                                                           right->val,
-                                                          trueLabel, // true
-                                                          endLabel); // false
+                                                          trueLabel,   // true
+                                                          falseLabel); // false
 
     // 创建结果变量
     LocalVariable * resultVar = static_cast<LocalVariable *>(module->newVarValue(IntegerType::getTypeInt()));
@@ -1200,8 +1191,9 @@ bool IRGenerator::ir_logical_or(ast_node * node)
     node->blockInsts.addInst(new GotoInstruction(currentFunc, endLabel));
 
     // 结束标签 - 为假的情况
-    node->blockInsts.addInst(endLabel);
+    node->blockInsts.addInst(falseLabel);
     node->blockInsts.addInst(setFalse);
+    node->blockInsts.addInst(endLabel);
 
     // 设置结果
     node->val = resultVar;
@@ -1220,9 +1212,6 @@ bool IRGenerator::ir_logical_not(ast_node * node)
     if (!operand) {
         return false;
     }
-
-    // 转换为布尔值
-    operand = ir_convert_to_bool(operand);
 
     // 获取当前函数
     Function * currentFunc = module->getCurrentFunction();
@@ -1293,9 +1282,6 @@ bool IRGenerator::ir_if(ast_node * node)
         return false;
     }
 
-    // 转换为布尔值
-    cond = ir_convert_to_bool(cond);
-
     // 条件判断：如果条件为真，跳转到then块；否则跳转到else块
     BranchInstruction * branch = new BranchInstruction(currentFunc,
                                                        cond->val,
@@ -1364,7 +1350,7 @@ bool IRGenerator::ir_while(ast_node * node)
     currentFunc->setBreakTarget(endLabel);     // break跳转到循环结束
 
     // 先跳转到条件判断
-    node->blockInsts.addInst(new GotoInstruction(currentFunc, condLabel));
+    // node->blockInsts.addInst(new GotoInstruction(currentFunc, condLabel));
 
     // 条件判断块
     node->blockInsts.addInst(condLabel);
@@ -1376,15 +1362,12 @@ bool IRGenerator::ir_while(ast_node * node)
         return false;
     }
 
-    // 转换为布尔值
-    cond = ir_convert_to_bool(cond);
-
+    node->blockInsts.addInst(cond->blockInsts);
     // 条件判断：如果条件为真，跳转到循环体；否则跳转到循环结束
     BranchInstruction * branch = new BranchInstruction(currentFunc,
                                                        cond->val,
                                                        bodyLabel, // true
                                                        endLabel); // false
-    node->blockInsts.addInst(cond->blockInsts);
     node->blockInsts.addInst(branch);
 
     // 循环体
