@@ -163,9 +163,6 @@ protected:
     bool ir_break(ast_node * node);
     bool ir_continue(ast_node * node);
 
-    // 辅助方法 - 将值转换为布尔值(非0为真)
-    ast_node * ir_convert_to_bool(ast_node * expr_node);
-
     /// @brief AST的节点操作函数
     typedef bool (IRGenerator::*ast2ir_handler_t)(ast_node *);
 

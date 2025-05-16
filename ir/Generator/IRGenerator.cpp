@@ -1020,37 +1020,6 @@ bool IRGenerator::ir_ne(ast_node * node)
     return true;
 }
 
-/// @brief 将表达式值转换为布尔值(非0为真)
-/// @param expr_node 表达式节点
-/// @return 处理后的节点
-ast_node * IRGenerator::ir_convert_to_bool(ast_node * expr_node)
-{
-    if (!expr_node) {
-        return nullptr;
-    }
-
-    // 获取当前函数
-    Function * currentFunc = module->getCurrentFunction();
-
-    // 创建0常量
-    ConstInt * zero = module->newConstInt(0);
-
-    // 非0为真：创建 expr != 0 的比较指令
-    BinaryInstruction * boolInst = new BinaryInstruction(currentFunc,
-                                                         IRInstOperator::IRINST_OP_NE_I,
-                                                         expr_node->val,
-                                                         zero,
-                                                         IntegerType::getTypeInt());
-
-    // 将指令添加到表达式的指令块中
-    expr_node->blockInsts.addInst(boolInst);
-
-    // 更新值为布尔结果
-    expr_node->val = boolInst;
-
-    return expr_node;
-}
-
 /// @brief 逻辑与AST节点翻译成线性中间IR (短路求值) 逻辑运算结果只有0 1 保存在 node->val
 /// @param node AST节点
 /// @return 翻译是否成功，true：成功，false：失败
