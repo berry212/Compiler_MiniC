@@ -138,6 +138,9 @@ string getNodeName(ast_node * astnode)
             break;
         case ast_operator_type::AST_OP_CONTINUE:
             nodeName = "continue";
+        case ast_operator_type::AST_OP_FUNC_FORMAL_PARAM:
+            nodeName = "formal-param";
+            break;
         default:
             nodeName = "unknown";
             break;

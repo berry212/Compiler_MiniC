@@ -189,4 +189,8 @@ protected:
     std::any visitRelExp(MiniCParser::RelExpContext * ctx) override;
     std::any visitEqOp(MiniCParser::EqOpContext * ctx) override;
     std::any visitRelOp(MiniCParser::RelOpContext * ctx) override;
+
+    // 形参列表相关方法
+    std::any visitFormalParamList(MiniCParser::FormalParamListContext * ctx) override;
+    std::any visitFormalParam(MiniCParser::FormalParamContext * ctx) override;
 };

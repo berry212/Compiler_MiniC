@@ -15,6 +15,7 @@
 /// </table>
 ///
 
+#include <cstddef>
 #include <string>
 
 #include "Antlr4CSTVisitor.h"
@@ -76,18 +77,30 @@ std::any MiniCCSTVisitor::visitCompileUnit(MiniCParser::CompileUnitContext * ctx
 /// @param ctx CST上下文
 std::any MiniCCSTVisitor::visitFuncDef(MiniCParser::FuncDefContext * ctx)
 {
-    // 识别的文法产生式：funcDef : T_INT T_ID T_L_PAREN T_R_PAREN block;
+    // 识别的文法产生式：funcDef: (T_INT | T_VOID) T_ID T_L_PAREN formalParamList? T_R_PAREN block;
 
-    // 函数返回类型，终结符
-    type_attr funcReturnType{BasicType::TYPE_INT, (int64_t) ctx->T_INT()->getSymbol()->getLine()};
+    // 函数返回类型，可以是INT或VOID
+    type_attr funcReturnType{BasicType::TYPE_VOID, -1};
 
+    if (ctx->T_INT()) {
+        funcReturnType.type = BasicType::TYPE_INT;
+        funcReturnType.lineno = ctx->T_INT()->getSymbol()->getLine();
+	} else if (ctx->T_VOID()) {
+        funcReturnType.type = BasicType::TYPE_VOID;
+        funcReturnType.lineno = ctx->T_VOID()->getSymbol()->getLine();
+    }
+    
     // 创建函数名的标识符终结符节点，终结符
     char * id = strdup(ctx->T_ID()->getText().c_str());
 
     var_id_attr funcId{id, (int64_t) ctx->T_ID()->getSymbol()->getLine()};
 
-    // 形参结点目前没有，设置为空指针
+    // 处理形参列表
     ast_node * formalParamsNode = nullptr;
+    if (ctx->formalParamList()) {
+        // 有形参，创建形参节点
+        formalParamsNode = std::any_cast<ast_node *>(visitFormalParamList(ctx->formalParamList()));
+    }
 
     // 遍历block结点创建函数体节点，非终结符
     auto blockNode = std::any_cast<ast_node *>(visitBlock(ctx->block()));
@@ -664,4 +677,46 @@ std::any MiniCCSTVisitor::visitContinueStmt(MiniCParser::ContinueStmtContext * c
 {
     // 创建continue节点
     return ast_node::New(ast_operator_type::AST_OP_CONTINUE, nullptr);
+}
+
+std::any MiniCCSTVisitor::visitFormalParamList(MiniCParser::FormalParamListContext * ctx)
+{
+    // 识别的文法产生式：formalParamList: formalParam (T_COMMA formalParam)*;
+    // 创建形参列表节点
+    ast_node * formalParamsNode = create_contain_node(ast_operator_type::AST_OP_FUNC_FORMAL_PARAMS);
+
+    // 遍历所有形参并添加到形参列表节点
+    for (auto paramCtx: ctx->formalParam()) {
+        // 访问每个形参，获取形参节点
+        ast_node * paramNode = std::any_cast<ast_node *>(visitFormalParam(paramCtx));
+
+        // 添加到形参列表节点
+        formalParamsNode->insert_son_node(paramNode);
+    }
+
+    return formalParamsNode;
+}
+
+std::any MiniCCSTVisitor::visitFormalParam(MiniCParser::FormalParamContext * ctx)
+{
+    // 识别的文法产生式：formalParam: basicType T_ID;
+
+    // 获取形参类型
+    type_attr paramType = std::any_cast<type_attr>(visitBasicType(ctx->basicType()));
+
+    // 获取形参名称和行号
+    auto paramName = ctx->T_ID()->getText();
+    int64_t paramLineNo = (int64_t) ctx->T_ID()->getSymbol()->getLine();
+
+    // 创建形参类型节点
+    ast_node * paramTypeNode = create_type_node(paramType);
+
+    // 创建形参名称节点
+    ast_node * paramIdNode = ast_node::New(paramName, paramLineNo);
+
+    // 创建形参声明节点
+    ast_node * paramDeclNode =
+        ast_node::New(ast_operator_type::AST_OP_FUNC_FORMAL_PARAM, paramTypeNode, paramIdNode, nullptr);
+
+    return paramDeclNode;
 }
