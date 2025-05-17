@@ -379,21 +379,7 @@ std::any MiniCCSTVisitor::visitPrimaryExp(MiniCParser::PrimaryExpContext * ctx)
         // 无符号整型字面量
         // 识别 primaryExp: T_DIGIT
 
-        std::string numStr = ctx->T_DIGIT()->getText();
-        uint32_t val;
-
-        // 根据前缀确定进制
-        if (numStr.length() >= 2 && (numStr[0] == '0' && (numStr[1] == 'x' || numStr[1] == 'X'))) {
-            // 16进制 (0x 或 0X 开头)
-            val = (uint32_t) std::stoull(numStr, nullptr, 16);
-        } else if (numStr.length() >= 1 && numStr[0] == '0' && numStr.length() > 1) {
-            // 8进制 (0 开头且长度大于1)
-            val = (uint32_t) std::stoull(numStr, nullptr, 8);
-        } else {
-            // 10进制 (包括单独的0)
-            val = (uint32_t) std::stoull(numStr, nullptr, 10);
-        }
-
+        uint32_t val = (uint32_t) stoull(ctx->T_DIGIT()->getText(), nullptr, 0);
         int64_t lineNo = (int64_t) ctx->T_DIGIT()->getSymbol()->getLine();
         node = ast_node::New(digit_int_attr{val, lineNo});
     } else if (ctx->lVal()) {
