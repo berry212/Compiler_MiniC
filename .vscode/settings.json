@@ -23,7 +23,7 @@
 	"gitlens.gitCommands.skipConfirmations": ["fetch:command", "switch:command", "push:command"],
 	"workbench.iconTheme": "material-icon-theme",
 	"workbench.colorTheme": "Monokai",
-	"workbench.editor.enablePreview": false,
+	"workbench.editor.enablePreview": true,
 	"workbench.editorAssociations": {
 		"*.ipynb": "jupyter-notebook",
 		"*.pdf": "latex-workshop-pdf-hook"
