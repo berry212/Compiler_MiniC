@@ -735,7 +735,7 @@ tests 目录下存放了一些简单的测试用例。
 # 翻译 test1-1.c 成 ARM32 汇编
 ./build/minic -S -o tests/test1-1.s tests/test1-1.c
 # 把 test1-1.c 通过 arm 版的交叉编译器 gcc 翻译成汇编
-arm-linux-gnueabihf-gcc -S -o tests/test1-1-1.s tests/test1-1.c
+arm-linux-gnueabihf-gcc -S --include tests/std.h -o tests/test1-1-1.s tests/test1-1.c
 ```
 
 第一条命令通过minic编译器来生成的汇编test1-1.s
@@ -749,9 +749,9 @@ arm-linux-gnueabihf-gcc -S -o tests/test1-1-1.s tests/test1-1.c
 
 ```shell
 # 通过 ARM gcc 编译器把汇编程序翻译成可执行程序，目标平台 ARM32
-arm-linux-gnueabihf-gcc -static -g -o tests/test1-1 tests/test1-1.s
+arm-linux-gnueabihf-gcc -static -g -o tests/test1-1 tests/test1-1.s tests/std.c
 # 通过 ARM gcc 编译器把汇编程序翻译成可执行程序，目标平台 ARM32
-arm-linux-gnueabihf-gcc -static -g -o tests/test1-1-1 tests/test1-1-1.s
+arm-linux-gnueabihf-gcc -static -g -o tests/test1-1-1 tests/test1-1-1.s tests/std.c
 ```
 
 有以下几个点需要注意：
