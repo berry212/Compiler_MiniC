@@ -31,6 +31,14 @@ Module::Module(std::string _name) : name(_name)
     // 加入内置函数putint
     (void) newFunction("putint", VoidType::getType(), {new FormalParam{IntegerType::getTypeInt(), ""}}, true);
     (void) newFunction("getint", IntegerType::getTypeInt(), {}, true);
+    
+    // void putch(int a)
+    FormalParam* params;
+    params = new FormalParam(IntegerType::getTypeInt(), "a");
+    (void) newFunction("putch", VoidType::getType(), {params}, true);
+
+    // int getch()
+    (void) newFunction("getch", IntegerType::getTypeInt(), {}, true);
 }
 
 /// @brief 进入作用域，如进入函数体块、语句块等

@@ -38,7 +38,7 @@ varDecl: basicType varDef (T_COMMA varDef)* T_SEMICOLON;
 basicType: T_INT;
 
 // 变量定义
-varDef: T_ID;
+varDef: T_ID (T_ASSIGN expr)?;
 
 // 目前语句支持return和赋值语句 ?表示前面内容出现 1 或 0 次
 statement:

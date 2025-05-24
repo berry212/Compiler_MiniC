@@ -85,11 +85,11 @@ std::any MiniCCSTVisitor::visitFuncDef(MiniCParser::FuncDefContext * ctx)
     if (ctx->T_INT()) {
         funcReturnType.type = BasicType::TYPE_INT;
         funcReturnType.lineno = ctx->T_INT()->getSymbol()->getLine();
-	} else if (ctx->T_VOID()) {
+    } else if (ctx->T_VOID()) {
         funcReturnType.type = BasicType::TYPE_VOID;
         funcReturnType.lineno = ctx->T_VOID()->getSymbol()->getLine();
     }
-    
+
     // 创建函数名的标识符终结符节点，终结符
     char * id = strdup(ctx->T_ID()->getText().c_str());
 
@@ -431,7 +431,7 @@ std::any MiniCCSTVisitor::visitVarDecl(MiniCParser::VarDeclContext * ctx)
     type_attr typeAttr = std::any_cast<type_attr>(visitBasicType(ctx->basicType()));
 
     for (auto & varCtx: ctx->varDef()) {
-        // 变量名节点
+        // 变量名节点，也可能返回赋值语句节点，因为加入了变量定义初始化
         ast_node * id_node = std::any_cast<ast_node *>(visitVarDef(varCtx));
 
         // 创建类型节点
@@ -455,8 +455,18 @@ std::any MiniCCSTVisitor::visitVarDef(MiniCParser::VarDefContext * ctx)
 
     // 获取行号
     int64_t lineNo = (int64_t) ctx->T_ID()->getSymbol()->getLine();
+    // 创建变量名节点
+    ast_node * id_node = ast_node::New(varId, lineNo);
 
-    return ast_node::New(varId, lineNo);
+    // 检查是否有初始化表达式
+    if (ctx->T_ASSIGN() && ctx->expr()) {
+        ast_node * expr_node = std::any_cast<ast_node *>(visitExpr(ctx->expr()));
+
+        // 创建赋值节点，其孩子为变量名节点和表达式节点
+        return ast_node::New(ast_operator_type::AST_OP_ASSIGN, id_node, expr_node, nullptr);
+    }
+    // 无初始化表达式，直接返回变量名节点
+    return id_node;
 }
 
 std::any MiniCCSTVisitor::visitBasicType(MiniCParser::BasicTypeContext * ctx)
@@ -632,10 +642,10 @@ std::any MiniCCSTVisitor::visitIfStmt(MiniCParser::IfStmtContext * ctx)
 {
     // 条件表达式
     auto condNode = std::any_cast<ast_node *>(visitExpr(ctx->ifStatement()->expr()));
-    
+
     // 真分支语句
     auto thenNode = std::any_cast<ast_node *>(visitStatement(ctx->ifStatement()->statement(0)));
-    
+
     // 创建if节点
     ast_node * ifNode;
 
