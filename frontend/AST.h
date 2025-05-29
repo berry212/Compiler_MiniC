@@ -23,6 +23,7 @@
 
 #include "AttrType.h"
 #include "IRCode.h"
+#include "LabelInstruction.h"
 #include "Value.h"
 #include "VoidType.h"
 
@@ -164,6 +165,12 @@ public:
     /// @brief 在进入block等节点时是否要进行作用域管理。默认要做。
     ///
     bool needScope = true;
+
+    ///
+    /// @brief 真假标签，用于生成 if 或 while 的 ir时，给下层逻辑表达式使用
+    ///
+    LabelInstruction* trueLabel;
+    LabelInstruction* falseLabel;
 
     /// @brief 创建指定节点类型的节点
     /// @param _node_type 节点类型

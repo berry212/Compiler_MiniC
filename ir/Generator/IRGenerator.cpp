@@ -207,7 +207,7 @@ bool IRGenerator::ir_function_define(ast_node * node)
         // 添加形参到列表
         params.push_back(param);
     }
-    
+
     // 创建一个新的函数定义
     Function * newFunc = module->newFunction(name_node->name, type_node->type, params);
     if (!newFunc) {
@@ -303,7 +303,7 @@ bool IRGenerator::ir_function_formal_params(ast_node * node)
         minic_log(LOG_ERROR, "翻译形参时当前函数为空");
         return false;
     }
-    
+
     // 获取函数的形参列表
     auto & params = currentFunc->getParams();
 
@@ -1119,70 +1119,87 @@ bool IRGenerator::ir_logical_and(ast_node * node)
     Function * currentFunc = module->getCurrentFunction();
 
     // 创建标签：右操作数执行块、AND结果为假的块、AND结束块
-    LabelInstruction * rightLabel = new LabelInstruction(currentFunc);
-    LabelInstruction * trueLabel = new LabelInstruction(currentFunc);
-    LabelInstruction * falseLabel = new LabelInstruction(currentFunc);
-    LabelInstruction * endLabel = new LabelInstruction(currentFunc);
+    LabelInstruction * trueLabel = node->trueLabel;
+    LabelInstruction * falseLabel = node->falseLabel;
+    bool needOwnLabels = !trueLabel || !falseLabel;
+
+    if (needOwnLabels) {
+        trueLabel = new LabelInstruction(currentFunc);
+        falseLabel = new LabelInstruction(currentFunc);
+    }
+    
+    // 使用上层标签，只需要创建右操作数标签
+    LabelInstruction * rightSideLabel = new LabelInstruction(currentFunc);
 
     // 计算左操作数
     ast_node * left_node = node->sons[0];
+    left_node->trueLabel = rightSideLabel;
+    left_node->falseLabel = falseLabel;
     ast_node * left = ir_visit_ast_node(left_node);
     if (!left) {
         return false;
     }
 
-    // 左操作数判断：如果左操作数为假，直接跳转到假标签
-    BranchInstruction * leftBranch = new BranchInstruction(currentFunc,
-                                                           left->val,
-                                                           rightLabel, // 右操作数标签
-                                                           falseLabel);
+    // 如果left是逻辑表达式，则会自动生成跳转指令（他拿着我们的真假标签）
+    node->blockInsts.addInst(left->blockInsts);
+    // 如果左操作数是一个值，他只会做计算，因此我们要自己生成跳转指令
+    if (left_node->node_type != ast_operator_type::AST_OP_LAND &&
+        left_node->node_type != ast_operator_type::AST_OP_LOR &&
+        left_node->node_type != ast_operator_type::AST_OP_LNOT) {
+        BranchInstruction * leftBranch = new BranchInstruction(currentFunc,
+                                                               left->val,
+                                                               rightSideLabel, // 为真跳转到右操作数
+                                                               falseLabel);    // 为假跳转到假标签
+        node->blockInsts.addInst(leftBranch);
+    }
 
+    // 右操作数标签
+    node->blockInsts.addInst(rightSideLabel);
     // 计算右操作数
     ast_node * right_node = node->sons[1];
+    right_node->trueLabel = trueLabel;
+    right_node->falseLabel = falseLabel;
     ast_node * right = ir_visit_ast_node(right_node);
     if (!right) {
         return false;
     }
-
-    // 右操作数判断：无论右操作数真假，都需要跳转到结束点
-    BranchInstruction * rightBranch = new BranchInstruction(currentFunc,
-                                                            right->val,
-                                                            trueLabel,   // true
-                                                            falseLabel); // false
-
-    // 创建结果变量 (phi指令)
-    LocalVariable * resultVar = static_cast<LocalVariable *>(module->newVarValue(IntegerType::getTypeInt()));
-
-    // 对于假结果，设置为0
-    ConstInt * zeroVal = module->newConstInt(0);
-    MoveInstruction * setFalse = new MoveInstruction(currentFunc, resultVar, zeroVal);
-
-    // 对于真结果(从右操作数过来)，设置为1
-    ConstInt * oneVal = module->newConstInt(1);
-    MoveInstruction * setTrue = new MoveInstruction(currentFunc, resultVar, oneVal);
-
-    // 组装指令块
-    node->blockInsts.addInst(left->blockInsts);
-    node->blockInsts.addInst(leftBranch); // bc left, rightLabel, falseLabel
-
-    // 右操作数标签
-    node->blockInsts.addInst(rightLabel);
+    // 右操作数指令块
     node->blockInsts.addInst(right->blockInsts);
-    node->blockInsts.addInst(rightBranch); // bc right, trueLabel, falseLabel
+    if (right_node->node_type != ast_operator_type::AST_OP_LAND &&
+        right_node->node_type != ast_operator_type::AST_OP_LOR &&
+        right_node->node_type != ast_operator_type::AST_OP_LNOT) {
+        BranchInstruction * rightBranch = new BranchInstruction(currentFunc,
+                                                                right->val,
+                                                                trueLabel,   // true
+                                                                falseLabel); // false
+        node->blockInsts.addInst(rightBranch);
+    }
 
-    // 假结果标签
-    node->blockInsts.addInst(falseLabel);
-    node->blockInsts.addInst(setFalse);
-    node->blockInsts.addInst(new GotoInstruction(currentFunc, endLabel));
+    // 如果需要自己的标签，生成结果变量和相关代码
+    if (needOwnLabels) {
+        LabelInstruction * endLabel = new LabelInstruction(currentFunc);
 
-    // 结束标签 - 为真的情况
-    node->blockInsts.addInst(trueLabel);
-    node->blockInsts.addInst(setTrue);
-    node->blockInsts.addInst(endLabel);
+        // 创建结果变量 - 必须是局部变量，不能直接赋值
+        LocalVariable * resultVar = static_cast<LocalVariable *>(module->newVarValue(IntegerType::getTypeInt()));
 
-    // 设置结果
-    node->val = resultVar;
+        // 创建常量
+        ConstInt * zeroVal = module->newConstInt(0);
+        ConstInt * oneVal = module->newConstInt(1);
 
+        // 真结果标签
+        node->blockInsts.addInst(trueLabel);
+        node->blockInsts.addInst(new MoveInstruction(currentFunc, resultVar, oneVal));
+        node->blockInsts.addInst(new GotoInstruction(currentFunc, endLabel));
+
+        // 假结果标签
+        node->blockInsts.addInst(falseLabel);
+        node->blockInsts.addInst(new MoveInstruction(currentFunc, resultVar, zeroVal));
+
+        node->blockInsts.addInst(endLabel);
+
+        // 设置结果 - 必须是Variable，不能是其他类型
+        node->val = resultVar;
+    }
     return true;
 }
 
@@ -1193,71 +1210,88 @@ bool IRGenerator::ir_logical_or(ast_node * node)
 {
     Function * currentFunc = module->getCurrentFunction();
 
-    // 创建标签：右操作数执行块、OR结果为真的块、OR结束块
-    LabelInstruction * rightLabel = new LabelInstruction(currentFunc);
-    LabelInstruction * trueLabel = new LabelInstruction(currentFunc);
-    LabelInstruction * endLabel = new LabelInstruction(currentFunc);
-    LabelInstruction * falseLabel = new LabelInstruction(currentFunc);
+    // 创建标签：右操作数执行块、AND结果为假的块、AND结束块
+    LabelInstruction * trueLabel = node->trueLabel;
+    LabelInstruction * falseLabel = node->falseLabel;
+    bool needOwnLabels = !trueLabel || !falseLabel;
+
+    if (needOwnLabels) {
+        trueLabel = new LabelInstruction(currentFunc);
+        falseLabel = new LabelInstruction(currentFunc);
+    }
+
+    // 使用上层标签，只需要创建右操作数标签
+    LabelInstruction * rightSideLabel = new LabelInstruction(currentFunc);
 
     // 计算左操作数
     ast_node * left_node = node->sons[0];
+    left_node->trueLabel = trueLabel;
+    left_node->falseLabel = rightSideLabel;
     ast_node * left = ir_visit_ast_node(left_node);
     if (!left) {
         return false;
     }
 
-    // 左操作数判断：如果左操作数为真，直接跳转到真标签
-    BranchInstruction * branchTrue = new BranchInstruction(currentFunc,
-                                                           left->val,
-                                                           trueLabel,   // true
-                                                           rightLabel); // false
+    // 如果left是逻辑表达式，则会自动生成跳转指令（他拿着我们的真假标签）
+    node->blockInsts.addInst(left->blockInsts);
+    // 如果左操作数是一个值，他只会做计算，因此我们要自己生成跳转指令
+    if (left_node->node_type != ast_operator_type::AST_OP_LAND &&
+        left_node->node_type != ast_operator_type::AST_OP_LOR &&
+        left_node->node_type != ast_operator_type::AST_OP_LNOT) {
+        BranchInstruction * leftBranch = new BranchInstruction(currentFunc,
+                                                               left->val,
+                                                               trueLabel, // 为真跳转到真标签
+                                                               rightSideLabel);    // 为假跳转到右部标签
+        node->blockInsts.addInst(leftBranch);
+    }
 
+    // 右操作数标签
+    node->blockInsts.addInst(rightSideLabel);
     // 计算右操作数
     ast_node * right_node = node->sons[1];
+    right_node->trueLabel = trueLabel;
+    right_node->falseLabel = falseLabel;
     ast_node * right = ir_visit_ast_node(right_node);
     if (!right) {
         return false;
     }
-
-    // 右操作数判断：无论右操作数真假，都需要跳转到各自的标签
-    BranchInstruction * branchEnd = new BranchInstruction(currentFunc,
-                                                          right->val,
-                                                          trueLabel,   // true
-                                                          falseLabel); // false
-
-    // 创建结果变量
-    LocalVariable * resultVar = static_cast<LocalVariable *>(module->newVarValue(IntegerType::getTypeInt()));
-
-    // 对于假结果，设置为0
-    ConstInt * zeroVal = module->newConstInt(0);
-    MoveInstruction * setFalse = new MoveInstruction(currentFunc, resultVar, zeroVal);
-
-    // 对于真结果，设置为1
-    ConstInt * oneVal = module->newConstInt(1);
-    MoveInstruction * setTrue = new MoveInstruction(currentFunc, resultVar, oneVal);
-
-    // 组装指令块
-    node->blockInsts.addInst(left->blockInsts);
-    node->blockInsts.addInst(branchTrue);
-
-    // 右操作数标签
-    node->blockInsts.addInst(rightLabel);
+    // 右操作数指令块
     node->blockInsts.addInst(right->blockInsts);
-    node->blockInsts.addInst(branchEnd);
+    if (right_node->node_type != ast_operator_type::AST_OP_LAND &&
+        right_node->node_type != ast_operator_type::AST_OP_LOR &&
+        right_node->node_type != ast_operator_type::AST_OP_LNOT) {
+        BranchInstruction * rightBranch = new BranchInstruction(currentFunc,
+                                                                right->val,
+                                                                trueLabel,   // true
+                                                                falseLabel); // false
+        node->blockInsts.addInst(rightBranch);
+    }
 
-    // 真结果标签
-    node->blockInsts.addInst(trueLabel);
-    node->blockInsts.addInst(setTrue);
-    node->blockInsts.addInst(new GotoInstruction(currentFunc, endLabel));
+    // 如果需要自己的标签，生成结果变量和相关代码
+    if (needOwnLabels) {
+        LabelInstruction * endLabel = new LabelInstruction(currentFunc);
 
-    // 结束标签 - 为假的情况
-    node->blockInsts.addInst(falseLabel);
-    node->blockInsts.addInst(setFalse);
-    node->blockInsts.addInst(endLabel);
+        // 创建结果变量 - 必须是局部变量，不能直接赋值
+        LocalVariable * resultVar = static_cast<LocalVariable *>(module->newVarValue(IntegerType::getTypeInt()));
 
-    // 设置结果
-    node->val = resultVar;
+        // 创建常量
+        ConstInt * zeroVal = module->newConstInt(0);
+        ConstInt * oneVal = module->newConstInt(1);
 
+        // 真结果标签
+        node->blockInsts.addInst(trueLabel);
+        node->blockInsts.addInst(new MoveInstruction(currentFunc, resultVar, oneVal));
+        node->blockInsts.addInst(new GotoInstruction(currentFunc, endLabel));
+
+        // 假结果标签
+        node->blockInsts.addInst(falseLabel);
+        node->blockInsts.addInst(new MoveInstruction(currentFunc, resultVar, zeroVal));
+
+        node->blockInsts.addInst(endLabel);
+
+        // 设置结果 - 必须是Variable，不能是其他类型
+        node->val = resultVar;
+    }
     return true;
 }
 
@@ -1266,59 +1300,101 @@ bool IRGenerator::ir_logical_or(ast_node * node)
 /// @return 翻译是否成功，true：成功，false：失败
 bool IRGenerator::ir_logical_not(ast_node * node)
 {
+    // 检查是否有上层提供的真假标签
+    LabelInstruction * trueLabel = node->trueLabel;
+    LabelInstruction * falseLabel = node->falseLabel;
+
     // 计算操作数
     ast_node * operand_node = node->sons[0];
-    ast_node * operand = ir_visit_ast_node(operand_node);
-    if (!operand) {
-        return false;
+
+    if (trueLabel && falseLabel) {
+        // 如果有上层标签，实现逻辑非只需要调换真假标签
+        operand_node->trueLabel = falseLabel; // 操作数为真时跳到假标签
+        operand_node->falseLabel = trueLabel; // 操作数为假时跳到真标签
+
+        ast_node * operand = ir_visit_ast_node(operand_node);
+        if (!operand) {
+            return false;
+        }
+
+        // 添加操作数的指令块
+        node->blockInsts.addInst(operand->blockInsts);
+
+        // 如果操作数不是逻辑表达式，需要创建分支指令，颠倒标签实现逻辑非
+        if (operand_node->node_type != ast_operator_type::AST_OP_LAND &&
+            operand_node->node_type != ast_operator_type::AST_OP_LOR &&
+            operand_node->node_type != ast_operator_type::AST_OP_LNOT) {
+            BranchInstruction * branch = new BranchInstruction(module->getCurrentFunction(),
+                                                               operand->val,
+                                                               falseLabel, // 如果为真，跳到假标签
+                                                               trueLabel); // 如果为假，跳到真标签
+            node->blockInsts.addInst(branch);
+        }
+    } else {
+        // 没有上层标签，需要创建自己的标签和结果变量
+        Function * currentFunc = module->getCurrentFunction();
+        LabelInstruction * trueLabel_not = new LabelInstruction(currentFunc);
+        LabelInstruction * falseLabel_not = new LabelInstruction(currentFunc);
+        LabelInstruction * endLabel_not = new LabelInstruction(currentFunc);
+
+        // 结果变量
+        LocalVariable * resultVar = static_cast<LocalVariable *>(module->newVarValue(IntegerType::getTypeInt()));
+
+        // 创建常量
+        ConstInt * zeroVal = module->newConstInt(0);
+        ConstInt * oneVal = module->newConstInt(1);
+
+        // 检查操作数是否为逻辑表达式
+        if (operand_node->node_type == ast_operator_type::AST_OP_LAND ||
+            operand_node->node_type == ast_operator_type::AST_OP_LOR ||
+            operand_node->node_type == ast_operator_type::AST_OP_LNOT) {
+
+            // 操作数是逻辑表达式，传递调换后的真假标签
+            operand_node->trueLabel = falseLabel_not; // 操作数为真时跳到假标签
+            operand_node->falseLabel = trueLabel_not; // 操作数为假时跳到真标签
+
+            ast_node * operand = ir_visit_ast_node(operand_node);
+            if (!operand) {
+                return false;
+            }
+
+            // 添加操作数的指令块（包含跳转指令）
+            node->blockInsts.addInst(operand->blockInsts);
+
+        } else {
+            // 操作数不是逻辑表达式，需要自己生成跳转指令
+            ast_node * operand = ir_visit_ast_node(operand_node);
+            if (!operand) {
+                return false;
+            }
+
+            // 添加操作数的指令块
+            node->blockInsts.addInst(operand->blockInsts);
+
+            // 创建分支指令，颠倒标签实现逻辑非
+            BranchInstruction * branch = new BranchInstruction(currentFunc,
+                                                               operand->val,
+                                                               falseLabel_not, // 如果为真，跳到假标签
+                                                               trueLabel_not); // 如果为假，跳到真标签
+            node->blockInsts.addInst(branch);
+        }
+
+        // 此时程序的控制流应该按照代码逻辑，跳转到真假标签
+        // 真标签 - 设置为1
+        node->blockInsts.addInst(trueLabel_not);
+        node->blockInsts.addInst(new MoveInstruction(currentFunc, resultVar, oneVal));
+        node->blockInsts.addInst(new GotoInstruction(currentFunc, endLabel_not));
+
+        // 假标签 - 设置为0
+        node->blockInsts.addInst(falseLabel_not);
+        node->blockInsts.addInst(new MoveInstruction(currentFunc, resultVar, zeroVal));
+
+        // 结束标签
+        node->blockInsts.addInst(endLabel_not);
+
+        // 设置结果
+        node->val = resultVar;
     }
-
-    // 获取当前函数
-    Function * currentFunc = module->getCurrentFunction();
-
-    // 创建0常量和1常量
-    ConstInt * zeroVal = module->newConstInt(0);
-    ConstInt * oneVal = module->newConstInt(1);
-
-    // 创建真假结果标签
-    LabelInstruction * trueLabel = new LabelInstruction(currentFunc);
-    LabelInstruction * falseLabel = new LabelInstruction(currentFunc);
-    LabelInstruction * endLabel = new LabelInstruction(currentFunc);
-
-    // 结果变量
-    LocalVariable * resultVar = static_cast<LocalVariable *>(module->newVarValue(IntegerType::getTypeInt()));
-
-    // 如果操作数为真，跳转到假标签；如果操作数为假，跳转到真标签
-    // 这里颠倒了标签，实现了逻辑非的效果
-    BranchInstruction * branch = new BranchInstruction(currentFunc,
-                                                       operand->val,
-                                                       falseLabel, // 如果为真，跳到假标签
-                                                       trueLabel); // 如果为假，跳到真标签
-
-    // 真结果：设置结果为1
-    MoveInstruction * setTrue = new MoveInstruction(currentFunc, resultVar, oneVal);
-
-    // 假结果：设置结果为0
-    MoveInstruction * setFalse = new MoveInstruction(currentFunc, resultVar, zeroVal);
-
-    // 组装指令块
-    node->blockInsts.addInst(operand->blockInsts);
-    node->blockInsts.addInst(branch);
-
-    // 真标签 - 设置为1
-    node->blockInsts.addInst(trueLabel);
-    node->blockInsts.addInst(setTrue);
-    node->blockInsts.addInst(new GotoInstruction(currentFunc, endLabel));
-
-    // 假标签 - 设置为0
-    node->blockInsts.addInst(falseLabel);
-    node->blockInsts.addInst(setFalse);
-
-    // 结束标签
-    node->blockInsts.addInst(endLabel);
-
-    // 设置结果
-    node->val = resultVar;
 
     return true;
 }
@@ -1335,18 +1411,14 @@ bool IRGenerator::ir_if(ast_node * node)
     LabelInstruction * elseLabel = new LabelInstruction(currentFunc);
     LabelInstruction * endLabel = new LabelInstruction(currentFunc);
 
-    // 计算条件表达式
+    // 计算条件表达式 (待实现对于值的if跳转)
     ast_node * cond_node = node->sons[0];
+    cond_node->trueLabel = thenLabel;  // 条件为真跳转到then块
+    cond_node->falseLabel = elseLabel; // 条件为假跳转到else块
     ast_node * cond = ir_visit_ast_node(cond_node);
     if (!cond) {
         return false;
     }
-
-    // 条件判断：如果条件为真，跳转到then块；否则跳转到else块
-    BranchInstruction * branch = new BranchInstruction(currentFunc,
-                                                       cond->val,
-                                                       thenLabel,  // true
-                                                       elseLabel); // false
 
     // 计算then块
     ast_node * then_node = node->sons[1];
@@ -1370,7 +1442,19 @@ bool IRGenerator::ir_if(ast_node * node)
 
     // 组装指令块
     node->blockInsts.addInst(cond->blockInsts);
-    node->blockInsts.addInst(branch);
+
+    // 注意，如果if的cond_node不是逻辑表达式，我们需要利用他的值来进行跳转
+    // 如果是逻辑表达式，在他们自身的处理逻辑中就会创建好跳转指令
+    if (cond_node->node_type != ast_operator_type::AST_OP_LAND &&
+        cond_node->node_type != ast_operator_type::AST_OP_LOR &&
+        cond_node->node_type != ast_operator_type::AST_OP_LNOT) {
+        // 条件判断：如果条件为真，跳转到then块；否则跳转到else块
+        BranchInstruction * branch = new BranchInstruction(currentFunc,
+                                                           cond->val,
+                                                           thenLabel,  // true
+                                                           elseLabel); // false
+        node->blockInsts.addInst(branch);
+    }
 
     // then块
     node->blockInsts.addInst(thenLabel);
@@ -1409,26 +1493,32 @@ bool IRGenerator::ir_while(ast_node * node)
     currentFunc->setContinueTarget(condLabel); // continue跳转到条件判断
     currentFunc->setBreakTarget(endLabel);     // break跳转到循环结束
 
-    // 先跳转到条件判断
-    // node->blockInsts.addInst(new GotoInstruction(currentFunc, condLabel));
-
     // 条件判断块
     node->blockInsts.addInst(condLabel);
 
-    // 计算条件表达式
+    // 计算条件表达式，传递标签用于逻辑表达式的短路求值
     ast_node * cond_node = node->sons[0];
+    cond_node->trueLabel = bodyLabel; // 条件为真跳转到循环体
+    cond_node->falseLabel = endLabel; // 条件为假跳转到循环结束
     ast_node * cond = ir_visit_ast_node(cond_node);
     if (!cond) {
         return false;
     }
 
     node->blockInsts.addInst(cond->blockInsts);
-    // 条件判断：如果条件为真，跳转到循环体；否则跳转到循环结束
-    BranchInstruction * branch = new BranchInstruction(currentFunc,
-                                                       cond->val,
-                                                       bodyLabel, // true
-                                                       endLabel); // false
-    node->blockInsts.addInst(branch);
+
+    // 注意，如果while的cond_node不是逻辑表达式，我们需要利用他的值来进行跳转
+    // 如果是逻辑表达式，在他们自身的处理逻辑中就会创建好跳转指令
+    if (cond_node->node_type != ast_operator_type::AST_OP_LAND &&
+        cond_node->node_type != ast_operator_type::AST_OP_LOR &&
+        cond_node->node_type != ast_operator_type::AST_OP_LNOT) {
+        // 条件判断：如果条件为真，跳转到循环体；否则跳转到循环结束
+        BranchInstruction * branch = new BranchInstruction(currentFunc,
+                                                           cond->val,
+                                                           bodyLabel, // true
+                                                           endLabel); // false
+        node->blockInsts.addInst(branch);
+    }
 
     // 循环体
     node->blockInsts.addInst(bodyLabel);
