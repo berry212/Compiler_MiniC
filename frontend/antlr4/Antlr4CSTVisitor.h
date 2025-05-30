@@ -193,4 +193,7 @@ protected:
     // 形参列表相关方法
     std::any visitFormalParamList(MiniCParser::FormalParamListContext * ctx) override;
     std::any visitFormalParam(MiniCParser::FormalParamContext * ctx) override;
+
+    // 数组声明符
+    std::any visitArrayDeclarator(MiniCParser::ArrayDeclaratorContext *ctx) override;
 };

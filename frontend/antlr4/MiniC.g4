@@ -19,8 +19,8 @@ funcDef: (T_INT | T_VOID) T_ID T_L_PAREN formalParamList? T_R_PAREN block;
 // 形参列表，支持多个形参
 formalParamList: formalParam (T_COMMA formalParam)*;
 
-// 单个形参定义
-formalParam: basicType T_ID;
+// 单个形参定义 - 支持数组形参
+formalParam: basicType T_ID arrayDeclarator?;
 
 // 语句块看用作函数体，这里允许多个语句，并且不含任何语句
 block: T_L_BRACE blockItemList? T_R_BRACE;
@@ -37,8 +37,11 @@ varDecl: basicType varDef (T_COMMA varDef)* T_SEMICOLON;
 // 基本类型
 basicType: T_INT;
 
-// 变量定义
-varDef: T_ID (T_ASSIGN expr)?;
+// 变量定义 - 支持数组定义
+varDef: T_ID arrayDeclarator? (T_ASSIGN expr)?;
+
+// 数组声明符 - 支持多维数组 - 需要初始化数组大小 - +代表1或多次
+arrayDeclarator: (T_L_BRACKET expr T_R_BRACKET)+;
 
 // 目前语句支持return和赋值语句 ?表示前面内容出现 1 或 0 次
 statement:
@@ -98,8 +101,8 @@ primaryExp: T_L_PAREN expr T_R_PAREN | T_DIGIT | lVal;
 // 实参列表
 realParamList: expr (T_COMMA expr)*;
 
-// 左值表达式
-lVal: T_ID;
+// 左值表达式 - 支持数组访问
+lVal: T_ID (T_L_BRACKET expr T_R_BRACKET)*;
 
 // 用正规式来进行词法规则的描述
 
@@ -108,6 +111,8 @@ T_R_PAREN: ')';
 T_SEMICOLON: ';';
 T_L_BRACE: '{';
 T_R_BRACE: '}';
+T_L_BRACKET: '[';
+T_R_BRACKET: ']';
 
 T_ASSIGN: '=';
 T_COMMA: ',';

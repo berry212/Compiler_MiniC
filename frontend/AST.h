@@ -121,7 +121,12 @@ enum class ast_operator_type : int {
     AST_OP_WHILE,
     AST_OP_BREAK,
     AST_OP_CONTINUE,
-    
+
+    // 数组访问节点, 孩子节点依次为 id, expr*，用于数组元素的读
+    AST_OP_ARRAY_ACCESS,
+    // 数组定义节点，在varDef逻辑中，用于数组指定元素的写
+    AST_OP_ARRAY_VAR,
+
     /// @brief 最大标识符，表示非法运算符
     AST_OP_MAX,
 };
@@ -169,8 +174,8 @@ public:
     ///
     /// @brief 真假标签，用于生成 if 或 while 的 ir时，给下层逻辑表达式使用
     ///
-    LabelInstruction* trueLabel;
-    LabelInstruction* falseLabel;
+    LabelInstruction * trueLabel;
+    LabelInstruction * falseLabel;
 
     /// @brief 创建指定节点类型的节点
     /// @param _node_type 节点类型

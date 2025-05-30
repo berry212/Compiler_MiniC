@@ -17,6 +17,7 @@
 
 #include <cstddef>
 #include <string>
+#include <vector>
 
 #include "Antlr4CSTVisitor.h"
 #include "AST.h"
@@ -410,14 +411,34 @@ std::any MiniCCSTVisitor::visitPrimaryExp(MiniCParser::PrimaryExpContext * ctx)
 
 std::any MiniCCSTVisitor::visitLVal(MiniCParser::LValContext * ctx)
 {
-    // 识别文法产生式：lVal: T_ID;
-    // 获取ID的名字
-    auto varId = ctx->T_ID()->getText();
+    // 识别文法产生式：lVal: T_ID (T_L_BRACKET expr T_R_BRACKET)*;
 
-    // 获取行号
+    // 获取ID的名字和行号
+    auto varId = ctx->T_ID()->getText();
     int64_t lineNo = (int64_t) ctx->T_ID()->getSymbol()->getLine();
 
-    return ast_node::New(varId, lineNo);
+    // 创建基础变量节点
+    ast_node * varNode = ast_node::New(varId, lineNo);
+
+    // 检查是否有数组索引
+    if (ctx->expr().empty()) {
+        // 没有数组索引，直接返回变量节点
+        return varNode;
+    }
+
+    // 创建一个数组访问节点
+    ast_node * arrayAccessNode = create_contain_node(ast_operator_type::AST_OP_ARRAY_ACCESS);
+
+    // 添加数组名作为第一个子节点
+    arrayAccessNode->insert_son_node(varNode);
+
+    // 添加所有索引作为后续子节点
+    for (auto exprCtx: ctx->expr()) {
+        ast_node * indexNode = std::any_cast<ast_node *>(visitExpr(exprCtx));
+        arrayAccessNode->insert_son_node(indexNode);
+    }
+
+    return arrayAccessNode;
 }
 
 std::any MiniCCSTVisitor::visitVarDecl(MiniCParser::VarDeclContext * ctx)
@@ -449,7 +470,7 @@ std::any MiniCCSTVisitor::visitVarDecl(MiniCParser::VarDeclContext * ctx)
 
 std::any MiniCCSTVisitor::visitVarDef(MiniCParser::VarDefContext * ctx)
 {
-    // varDef: T_ID;
+    // 识别的文法产生式：varDef: T_ID arrayDeclarator? (T_ASSIGN expr)?;
 
     auto varId = ctx->T_ID()->getText();
 
@@ -458,27 +479,31 @@ std::any MiniCCSTVisitor::visitVarDef(MiniCParser::VarDefContext * ctx)
     // 创建变量名节点
     ast_node * id_node = ast_node::New(varId, lineNo);
 
+    // 检查是否有数组声明符
+    if (ctx->arrayDeclarator()) {
+        // 有数组声明符，获取数组声明符节点
+        std::vector<int> dim = std::any_cast<std::vector<int>>(visitArrayDeclarator(ctx->arrayDeclarator()));
+
+        // 创建数组变量节点，将变量名和数组声明符结合
+        // TODO 简化AST?
+        id_node = ast_node::New(ast_operator_type::AST_OP_ARRAY_VAR, id_node, nullptr);
+        for (auto i : dim) {
+			// 为每个维度创建一个常数节点并添加到数组变量节点
+			ast_node* dim_node = ast_node::New(digit_int_attr{(uint32_t)i, lineNo});
+			id_node->insert_son_node(dim_node);
+		}
+    }
+
     // 检查是否有初始化表达式
     if (ctx->T_ASSIGN() && ctx->expr()) {
         ast_node * expr_node = std::any_cast<ast_node *>(visitExpr(ctx->expr()));
 
-        // 创建赋值节点，其孩子为变量名节点和表达式节点
+        // 创建赋值节点，其孩子为变量名节点（可能包含数组声明符）和表达式节点
         return ast_node::New(ast_operator_type::AST_OP_ASSIGN, id_node, expr_node, nullptr);
     }
-    // 无初始化表达式，直接返回变量名节点
+
+    // 无初始化表达式，直接返回变量名节点（可能包含数组声明符）
     return id_node;
-}
-
-std::any MiniCCSTVisitor::visitBasicType(MiniCParser::BasicTypeContext * ctx)
-{
-    // basicType: T_INT;
-    type_attr attr{BasicType::TYPE_VOID, -1};
-    if (ctx->T_INT()) {
-        attr.type = BasicType::TYPE_INT;
-        attr.lineno = (int64_t) ctx->T_INT()->getSymbol()->getLine();
-    }
-
-    return attr;
 }
 
 std::any MiniCCSTVisitor::visitRealParamList(MiniCParser::RealParamListContext * ctx)
@@ -709,7 +734,7 @@ std::any MiniCCSTVisitor::visitFormalParamList(MiniCParser::FormalParamListConte
 
 std::any MiniCCSTVisitor::visitFormalParam(MiniCParser::FormalParamContext * ctx)
 {
-    // 识别的文法产生式：formalParam: basicType T_ID;
+    // 识别的文法产生式：formalParam: basicType T_ID arrayDeclarator?;
 
     // 获取形参类型
     type_attr paramType = std::any_cast<type_attr>(visitBasicType(ctx->basicType()));
@@ -724,9 +749,48 @@ std::any MiniCCSTVisitor::visitFormalParam(MiniCParser::FormalParamContext * ctx
     // 创建形参名称节点
     ast_node * paramIdNode = ast_node::New(paramName, paramLineNo);
 
+    // 检查是否有数组声明符
+    if (ctx->arrayDeclarator()) {
+        // 有数组声明符，获取数组声明符节点
+        std::vector<int> dim = std::any_cast<std::vector<int>>(visitArrayDeclarator(ctx->arrayDeclarator()));
+        // 创建数组形参节点，将形参名和数组声明符结合
+        paramIdNode = ast_node::New(ast_operator_type::AST_OP_ARRAY_VAR, paramIdNode, nullptr);
+		for (auto i : dim) {
+			// 为每个维度创建一个常数节点并添加到数组形参节点
+			ast_node* dim_node = ast_node::New(digit_int_attr{(uint32_t)i, paramLineNo});
+			paramIdNode->insert_son_node(dim_node);
+		}
+    }
+
     // 创建形参声明节点
     ast_node * paramDeclNode =
         ast_node::New(ast_operator_type::AST_OP_FUNC_FORMAL_PARAM, paramTypeNode, paramIdNode, nullptr);
 
     return paramDeclNode;
+}
+
+std::any MiniCCSTVisitor::visitArrayDeclarator(MiniCParser::ArrayDeclaratorContext * ctx)
+{
+    // 识别的文法产生式：arrayDeclarator: (T_L_BRACKET expr T_R_BRACKET)+;
+	std::vector<int> dim;
+    // 遍历所有的数组维度表达式
+    for (auto exprCtx: ctx->expr()) {
+        // 获取每个维度的大小表达式
+        dim.push_back(static_cast<int> (std::any_cast<ast_node *>(visitExpr(exprCtx))->integer_val) );
+    }
+    return dim;
+}
+
+std::any MiniCCSTVisitor::visitBasicType(MiniCParser::BasicTypeContext * ctx)
+{
+    // 识别的文法产生式：basicType: T_INT;
+
+    type_attr typeAttr;
+
+    if (ctx->T_INT()) {
+        typeAttr.type = BasicType::TYPE_INT;
+        typeAttr.lineno = (int64_t) ctx->T_INT()->getSymbol()->getLine();
+    }
+
+    return typeAttr;
 }
