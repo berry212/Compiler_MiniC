@@ -66,9 +66,13 @@ enum class IRInstOperator : std::int8_t {
 
     // 分支指令
     IRINST_OP_BR, // 条件分支
-                  // 
+
     /// @brief 最大指令码，也是无效指令
-    IRINST_OP_MAX
+    IRINST_OP_MAX,
+
+    // 用于 MemMoveInstruction
+    IRINST_OP_LOAD,
+    IRINST_OP_STORE,
 };
 
 ///

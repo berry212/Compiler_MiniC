@@ -487,11 +487,11 @@ std::any MiniCCSTVisitor::visitVarDef(MiniCParser::VarDefContext * ctx)
         // 创建数组变量节点，将变量名和数组声明符结合
         // TODO 简化AST?
         id_node = ast_node::New(ast_operator_type::AST_OP_ARRAY_VAR, id_node, nullptr);
-        for (auto i : dim) {
-			// 为每个维度创建一个常数节点并添加到数组变量节点
-			ast_node* dim_node = ast_node::New(digit_int_attr{(uint32_t)i, lineNo});
-			id_node->insert_son_node(dim_node);
-		}
+        for (auto i: dim) {
+            // 为每个维度创建一个常数节点并添加到数组变量节点
+            ast_node * dim_node = ast_node::New(digit_int_attr{(uint32_t) i, lineNo});
+            id_node->insert_son_node(dim_node);
+        }
     }
 
     // 检查是否有初始化表达式
@@ -669,7 +669,16 @@ std::any MiniCCSTVisitor::visitIfStmt(MiniCParser::IfStmtContext * ctx)
     auto condNode = std::any_cast<ast_node *>(visitExpr(ctx->ifStatement()->expr()));
 
     // 真分支语句
-    auto thenNode = std::any_cast<ast_node *>(visitStatement(ctx->ifStatement()->statement(0)));
+    std::any thenResult = visitStatement(ctx->ifStatement()->statement(0));
+    ast_node * thenNode = nullptr;
+
+    // 尝试转换，如果转换失败或结果为nullptr，则创建空语句块
+    try {
+        thenNode = std::any_cast<ast_node *>(thenResult);
+    } catch (const std::bad_any_cast &) {
+        // 转换失败，说明返回类型不是 ast_node*, 创建一个空的语句块作为then分支
+        thenNode = create_contain_node(ast_operator_type::AST_OP_BLOCK);
+    }
 
     // 创建if节点
     ast_node * ifNode;
@@ -694,7 +703,16 @@ std::any MiniCCSTVisitor::visitWhileStmt(MiniCParser::WhileStmtContext * ctx)
     auto condNode = std::any_cast<ast_node *>(visitExpr(ctx->whileStatement()->expr()));
 
     // 循环体语句
-    auto bodyNode = std::any_cast<ast_node *>(visitStatement(ctx->whileStatement()->statement()));
+    std::any bodyResult = visitStatement(ctx->whileStatement()->statement());
+    ast_node * bodyNode = nullptr;
+
+    // 尝试转换，如果转换失败或结果为nullptr，则创建空语句块
+    try {
+        bodyNode = std::any_cast<ast_node *>(bodyResult);
+    } catch (const std::bad_any_cast &) {
+        // 转换失败，说明返回类型不是 ast_node*
+        bodyNode = create_contain_node(ast_operator_type::AST_OP_BLOCK);
+    }
 
     // 创建while节点
     return ast_node::New(ast_operator_type::AST_OP_WHILE, condNode, bodyNode, nullptr);
@@ -755,11 +773,11 @@ std::any MiniCCSTVisitor::visitFormalParam(MiniCParser::FormalParamContext * ctx
         std::vector<int> dim = std::any_cast<std::vector<int>>(visitArrayDeclarator(ctx->arrayDeclarator()));
         // 创建数组形参节点，将形参名和数组声明符结合
         paramIdNode = ast_node::New(ast_operator_type::AST_OP_ARRAY_VAR, paramIdNode, nullptr);
-		for (auto i : dim) {
-			// 为每个维度创建一个常数节点并添加到数组形参节点
-			ast_node* dim_node = ast_node::New(digit_int_attr{(uint32_t)i, paramLineNo});
-			paramIdNode->insert_son_node(dim_node);
-		}
+        for (auto i: dim) {
+            // 为每个维度创建一个常数节点并添加到数组形参节点
+            ast_node * dim_node = ast_node::New(digit_int_attr{(uint32_t) i, paramLineNo});
+            paramIdNode->insert_son_node(dim_node);
+        }
     }
 
     // 创建形参声明节点
@@ -772,12 +790,22 @@ std::any MiniCCSTVisitor::visitFormalParam(MiniCParser::FormalParamContext * ctx
 std::any MiniCCSTVisitor::visitArrayDeclarator(MiniCParser::ArrayDeclaratorContext * ctx)
 {
     // 识别的文法产生式：arrayDeclarator: (T_L_BRACKET expr T_R_BRACKET)+;
-	std::vector<int> dim;
-    // 遍历所有的数组维度表达式
-    for (auto exprCtx: ctx->expr()) {
-        // 获取每个维度的大小表达式
-        dim.push_back(static_cast<int> (std::any_cast<ast_node *>(visitExpr(exprCtx))->integer_val) );
+    std::vector<int> dim;
+
+    // 如果是形参数组声明且第一个维度为空，需要特殊处理
+    // 检查是否所有中括号数量比表达式数量多，说明第一个维度是空的
+    if (ctx->T_L_BRACKET().size() > ctx->expr().size()) {
+        // 如果第一个维度未被处理，添加一个0作为第一维
+        dim.push_back(0);
     }
+
+    // 遍历所有的数组维度表达式
+    for (size_t i = 0; i < ctx->expr().size(); i++) {
+        auto exprCtx = ctx->expr()[i];
+        ast_node * exprNode = std::any_cast<ast_node *>(visitExpr(exprCtx));
+        dim.push_back(static_cast<int>(exprNode->integer_val));
+    }
+
     return dim;
 }
 

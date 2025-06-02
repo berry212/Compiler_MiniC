@@ -174,6 +174,8 @@ set(IR_SRCS
 	ir/Instructions/MoveInstruction.h
 	ir/Instructions/BranchInstruction.cpp
 	ir/Instructions/BranchInstruction.h
+	ir/Instructions/MemMoveInstruction.cpp
+	ir/Instructions/MemMoveInstruction.h
 	ir/Types/VoidType.h
 	ir/Types/VoidType.cpp
 	ir/Types/LabelType.h
@@ -186,6 +188,8 @@ set(IR_SRCS
 	ir/Values/LocalVariable.h
 	ir/Values/MemVariable.h
 	ir/Values/RegVariable.h
+	ir/Types/ArrayType.cpp
+	ir/Types/ArrayType.h
 	ir/IRCode.h
 	ir/IRCode.cpp
 	ir/Constant.h
@@ -382,7 +386,7 @@ add_custom_command(TARGET ${PROJECT_NAME}
 )
 
 # 源代码打包
-set(CPACK_SOURCE_GENERATOR "TGZ")
+set(CPACK_SOURCE_GENERATOR "ZIP")
 set(CPACK_SOURCE_PACKAGE_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}-src")
 
 # 忽略不需要源代码目录或文件
@@ -399,7 +403,7 @@ set(CPACK_SOURCE_IGNORE_FILES
 )
 
 # 二进制打包
-set(CPACK_GENERATOR "TGZ")
+set(CPACK_GENERATOR "ZIP")
 
 # 安装可执行程序，不要bin文件夹下
 install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION .)

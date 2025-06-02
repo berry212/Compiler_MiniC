@@ -16,6 +16,7 @@
 ///
 #pragma once
 
+#include "ArrayType.h"
 #include "GlobalValue.h"
 #include "IRConstant.h"
 
@@ -89,7 +90,25 @@ public:
     ///
     void toDeclareString(std::string & str)
     {
-        str = "declare " + getType()->toString() + " " + getIRName();
+        if (getType()->isArrayType()) {
+            // 对于数组类型，先输出元素类型，然后是变量名，然后是维度
+            ArrayType * arrayType = static_cast<ArrayType *>(getType());
+
+            // 获取元素基本类型
+            std::string baseTypeStr = arrayType->getElementType()->toString();
+
+            // 组合成需要的格式：declare i32 @a[10][20]
+            str = "declare " + baseTypeStr + " " + getIRName();
+
+            // 添加数组维度
+            auto dimensions = arrayType->getDimensions();
+            for (auto dim: dimensions) {
+                str += "[" + std::to_string(dim) + "]";
+            }
+        } else {
+            // 非数组类型，按原样输出
+            str = "declare " + getType()->toString() + " " + getIRName();
+        }
     }
 
 private:

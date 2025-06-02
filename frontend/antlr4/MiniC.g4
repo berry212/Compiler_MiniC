@@ -40,8 +40,9 @@ basicType: T_INT;
 // 变量定义 - 支持数组定义
 varDef: T_ID arrayDeclarator? (T_ASSIGN expr)?;
 
-// 数组声明符 - 支持多维数组 - 需要初始化数组大小 - +代表1或多次
-arrayDeclarator: (T_L_BRACKET expr T_R_BRACKET)+;
+// 数组声明符 - 支持多维数组 - 需要初始化数组大小 - +代表1或多次 - 支持最高维度定义为空 eg. int a[][2]
+arrayDeclarator:
+	T_L_BRACKET expr? T_R_BRACKET (T_L_BRACKET expr T_R_BRACKET)*;
 
 // 目前语句支持return和赋值语句 ?表示前面内容出现 1 或 0 次
 statement:

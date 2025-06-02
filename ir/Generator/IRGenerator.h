@@ -19,8 +19,10 @@
 #include <unordered_map>
 
 #include "AST.h"
+#include "MemMoveInstruction.h"
 #include "Module.h"
 #include "LabelInstruction.h"
+#include "Value.h"
 
 /// @brief AST遍历产生线性IR类
 class IRGenerator {
@@ -163,11 +165,18 @@ protected:
     bool ir_break(ast_node * node);
     bool ir_continue(ast_node * node);
 
+    // 数组节点处理函数
+    bool ir_array_var(ast_node * node);
+    bool ir_array_access(ast_node * node);
+
+    ast_node * dereference(ast_node * node);
+
     /// @brief AST的节点操作函数
     typedef bool (IRGenerator::*ast2ir_handler_t)(ast_node *);
 
     /// @brief AST节点运算符与动作函数关联的映射表
     std::unordered_map<ast_operator_type, ast2ir_handler_t> ast2ir_handlers;
+
 private:
     /// @brief 抽象语法树的根
     ast_node * root;

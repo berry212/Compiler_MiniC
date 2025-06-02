@@ -18,6 +18,7 @@
 #include <cstdlib>
 #include <string>
 
+#include "ArrayType.h"
 #include "IRConstant.h"
 #include "Function.h"
 
@@ -92,9 +93,32 @@ void Function::toString(std::string & str)
             str += ", ";
         }
 
-        std::string param_str = param->getType()->toString() + param->getIRName();
+        if (param->getType()->isArrayType()) {
+            // 对于数组类型，先输出元素类型，然后是参数名，然后是各维度
+            ArrayType * arrayType = static_cast<ArrayType *>(param->getType());
+            // 获取元素基本类型
+            std::string baseTypeStr = arrayType->getElementType()->toString();
+            // 获取参数名
+            std::string paramName = param->getIRName();
+            // 组合成需要的格式：i32 %t0[0][10]
+            std::string param_str = baseTypeStr + " " + paramName;
 
-        str += param_str;
+            // 添加数组维度 - 第一维强制设为0
+            auto dimensions = arrayType->getDimensions();
+            for (size_t i = 0; i < dimensions.size(); ++i) {
+                if (i == 0) {
+                    // 第一维度设为0
+                    param_str += "[0]";
+                } else {
+                    // 其余维度保持原值
+                    param_str += "[" + std::to_string(dimensions[i]) + "]";
+                }
+            }
+            str += param_str;
+        } else {
+            std::string param_str = param->getType()->toString() + param->getIRName();
+            str += param_str;
+        }
     }
 
     str += ")\n";
@@ -105,7 +129,23 @@ void Function::toString(std::string & str)
     for (auto & var: this->varsVector) {
 
         // 局部变量和临时变量需要输出declare语句
-        str += "\tdeclare " + var->getType()->toString() + " " + var->getIRName();
+        if (var->getType()->isArrayType()) {
+            // 对于数组类型，先输出元素类型，然后是变量名，然后是维度
+            ArrayType * arrayType = static_cast<ArrayType *>(var->getType());
+            // 获取元素基本类型
+            std::string baseTypeStr = arrayType->getElementType()->toString();
+            // 组合成需要的格式：declare i32 %l0[10][20]
+            str += "\tdeclare " + baseTypeStr + " " + var->getIRName();
+
+            // 添加数组维度
+            auto dimensions = arrayType->getDimensions();
+            for (auto dim: dimensions) {
+                str += "[" + std::to_string(dim) + "]";
+            }
+        } else {
+            // 非数组类型，按原样输出
+            str += "\tdeclare " + var->getType()->toString() + " " + var->getIRName();
+        }
 
         std::string extraStr;
         std::string realName = var->getName();
@@ -289,7 +329,7 @@ void Function::renameIR()
 
     int32_t localVarIndex = 0;
     int32_t tmpVarIndex = 0;
-	int32_t labelIndex = 0;
+    int32_t labelIndex = 0;
     // 形式参数重命名
     for (auto & param: this->params) {
         param->setIRName(IR_TEMP_VARNAME_PREFIX + std::to_string(tmpVarIndex++));
