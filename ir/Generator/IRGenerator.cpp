@@ -374,6 +374,13 @@ bool IRGenerator::ir_function_formal_params(ast_node * node)
             // 收集数组维度信息
             for (size_t j = 1; j < name_node->sons.size(); j++) {
                 ast_node * dim_node = name_node->sons[j];
+
+                // 在第一轮将最高维度设置为 0
+                if (dim_node->node_type == ast_operator_type::AST_OP_LEAF_LITERAL_UINT && j == 1) {
+                    dimensions.push_back(0); 
+                    continue;
+                }
+                
                 if (dim_node->node_type == ast_operator_type::AST_OP_LEAF_LITERAL_UINT) {
                     dimensions.push_back(static_cast<int32_t>(dim_node->integer_val));
                 } else {
@@ -397,7 +404,7 @@ bool IRGenerator::ir_function_formal_params(ast_node * node)
             // 将形参值赋给局部数组变量
             MoveInstruction * moveInst = new MoveInstruction(currentFunc, arrayVar, param);
             node->blockInsts.addInst(moveInst);
-        } else {
+        } else { // 如果不是数组类型, 按照普通变量处理
             // 普通形参处理
             LocalVariable * localVar =
                 static_cast<LocalVariable *>(module->newVarValue(type_node->type, name_node->name));
