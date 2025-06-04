@@ -15,10 +15,12 @@
 ///
 #include "Module.h"
 
+#include "ArrayType.h"
 #include "IntegerType.h"
 #include "ScopeStack.h"
 #include "Common.h"
 #include "VoidType.h"
+#include <vector>
 
 Module::Module(std::string _name) : name(_name)
 {
@@ -28,17 +30,31 @@ Module::Module(std::string _name) : name(_name)
     // 确保全局变量作用域入栈，这样全局变量才可以加入
     scopeStack->enterScope();
 
-    // 加入内置函数putint
+    // 加入内置函数putint getint
     (void) newFunction("putint", VoidType::getType(), {new FormalParam{IntegerType::getTypeInt(), ""}}, true);
     (void) newFunction("getint", IntegerType::getTypeInt(), {}, true);
-    
+
     // void putch(int a)
-    FormalParam* params;
+    FormalParam * params;
     params = new FormalParam(IntegerType::getTypeInt(), "a");
     (void) newFunction("putch", VoidType::getType(), {params}, true);
 
     // int getch()
     (void) newFunction("getch", IntegerType::getTypeInt(), {}, true);
+
+    // void putarray(int n, int a[])
+    std::vector<FormalParam *> putarrayParams;
+    std::vector<int> dimensions;
+    dimensions.push_back(0);
+    ArrayType * arrayType = ArrayType::getArrayType(IntegerType::getTypeInt(), dimensions);
+    putarrayParams.push_back(new FormalParam(IntegerType::getTypeInt(), "n"));
+    putarrayParams.push_back(new FormalParam(arrayType, "a"));
+    (void) newFunction("putarray", VoidType::getType(), putarrayParams, true);
+
+    // int getarray(int a[])
+    std::vector<FormalParam *> getarrayParams;
+    getarrayParams.push_back(new FormalParam(arrayType, "a"));
+    (void) newFunction("getarray", IntegerType::getTypeInt(), getarrayParams, true);
 }
 
 /// @brief 进入作用域，如进入函数体块、语句块等

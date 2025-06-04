@@ -86,3 +86,8 @@ int32_t ArrayType::getElementOffset(const std::vector<int32_t> & indices) const
 
     return offset;
 }
+
+ArrayType * ArrayType::getArrayType(Type * elemType, const std::vector<int32_t> & dimensions)
+{
+    return new ArrayType(elemType, dimensions);
+}

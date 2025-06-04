@@ -91,6 +91,14 @@ public:
         return true;
     }
 
+    ///
+    /// @brief 获取数组类型
+    /// @param elemType 元素类型
+    /// @param dimensions 维度信息
+    /// @return ArrayType* 数组类型指针
+    ///
+    static ArrayType * getArrayType(Type * elemType, const std::vector<int32_t> & dimensions);
+
 private:
     Type * elementType;              ///< 数组元素类型
     std::vector<int32_t> dimensions; ///< 数组各维度大小
