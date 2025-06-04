@@ -48,7 +48,7 @@ void CodeGeneratorArm32::genHeader()
     fprintf(fp, "%s\n", ".fpu vfpv4");
 }
 
-/// @brief 全局变量Section，主要包含初始化的和未初始化过的
+/// @brief 全局变量Section，主要包含初始化的和未初始化过的 (静态全局变量未实现)
 void CodeGeneratorArm32::genDataSection()
 {
     // 生成代码段
@@ -73,13 +73,14 @@ void CodeGeneratorArm32::genDataSection()
             fprintf(fp, ".align %d\n", var->getAlignment());
             fprintf(fp, ".type %s, %%object\n", var->getName().c_str());
             fprintf(fp, "%s\n", var->getName().c_str());
-            // TODO 后面设置初始化的值，具体请参考ARM的汇编
+            // TODO 全局变量只有int才可以初始化, array不行
+            fprintf(fp, ".word %d\n", var->getInitValue());
         }
     }
 }
 
 ///
-/// @brief 获取IR变量相关信息字符串
+/// @brief 获取IR变量相关信息字符串, 生成注释信息, 例如 @ myVar:[fp,#-8] 或 @ myVar:r0
 /// @param str
 ///
 void CodeGeneratorArm32::getIRValueStr(Value * val, std::string & str)
@@ -110,7 +111,7 @@ void CodeGeneratorArm32::getIRValueStr(Value * val, std::string & str)
     }
 }
 
-/// @brief 针对函数进行汇编指令生成，放到.text代码段中
+/// @brief 针对函数进行汇编指令生成，主执行逻辑
 /// @param func 要处理的函数
 void CodeGeneratorArm32::genCodeSection(Function * func)
 {

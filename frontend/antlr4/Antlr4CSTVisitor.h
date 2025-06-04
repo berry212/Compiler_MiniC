@@ -194,5 +194,6 @@ protected:
     std::any visitFormalParamList(MiniCParser::FormalParamListContext * ctx) override;
     std::any visitFormalParam(MiniCParser::FormalParamContext * ctx) override;
 
-    std::any visitNop(MiniCParser::NopContext *ctx) override;
+    std::any visitNop(MiniCParser::NopContext * ctx) override;
+    std::any visitArrayDeclarator(MiniCParser::ArrayDeclaratorContext * ctx) override;
 };
