@@ -46,14 +46,17 @@ arrayDeclarator:
 
 // 目前语句支持return和赋值语句 ?表示前面内容出现 1 或 0 次
 statement:
-	T_RETURN expr T_SEMICOLON			# returnStatement
+	T_RETURN expr? T_SEMICOLON			# returnStatement
 	| lVal T_ASSIGN expr T_SEMICOLON	# assignStatement
 	| block								# blockStatement
 	| ifStatement						# ifStmt
 	| whileStatement					# whileStmt
 	| breakStatement					# breakStmt
 	| continueStatement					# continueStmt
-	| expr? T_SEMICOLON					# expressionStatement;
+	| expr T_SEMICOLON					# expressionStatement
+	| T_SEMICOLON 						# nop;
+
+// nopStatement: T_SEMICOLON;
 
 // 新增控制流语句规则
 ifStatement: T_IF T_L_PAREN expr T_R_PAREN statement (T_ELSE statement)?;

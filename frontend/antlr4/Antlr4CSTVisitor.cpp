@@ -22,6 +22,7 @@
 #include "Antlr4CSTVisitor.h"
 #include "AST.h"
 #include "AttrType.h"
+#include "Instruction.h"
 
 #define Instanceof(res, type, var) auto res = dynamic_cast<type>(var)
 
@@ -158,7 +159,6 @@ std::any MiniCCSTVisitor::visitBlockItem(MiniCParser::BlockItemContext * ctx)
     // 识别的文法产生式：blockItem : statement | varDecl
     if (ctx->statement()) {
         // 语句识别
-
         return visitStatement(ctx->statement());
     } else if (ctx->varDecl()) {
         return visitVarDecl(ctx->varDecl());
@@ -191,6 +191,8 @@ std::any MiniCCSTVisitor::visitStatement(MiniCParser::StatementContext * ctx)
         return visitBreakStmt(breakCtx);
     } else if (Instanceof(continueCtx, MiniCParser::ContinueStmtContext *, ctx)) {
         return visitContinueStmt(continueCtx);
+    } else if (Instanceof(NopContext, MiniCParser::NopContext *, ctx)) {
+        return visitNop(NopContext);
     }
 
     return nullptr;
@@ -204,11 +206,16 @@ std::any MiniCCSTVisitor::visitReturnStatement(MiniCParser::ReturnStatementConte
 {
     // 识别的文法产生式：returnStatement -> T_RETURN expr T_SEMICOLON
 
-    // 非终结符，表达式expr遍历
-    auto exprNode = std::any_cast<ast_node *>(visitExpr(ctx->expr()));
-
-    // 创建返回节点，其孩子为Expr
-    return create_contain_node(ast_operator_type::AST_OP_RETURN, exprNode);
+    if (ctx->expr()) {
+        // 非终结符，表达式expr遍历
+        auto exprNode = std::any_cast<ast_node *>(visitExpr(ctx->expr()));
+        // 创建返回节点，其孩子为Expr
+        return create_contain_node(ast_operator_type::AST_OP_RETURN, exprNode);
+    } else {
+        // 空的return语句（用于void函数）
+        // 创建返回节点，没有子节点
+        return create_contain_node(ast_operator_type::AST_OP_RETURN);
+    }
 }
 
 /// @brief 非终结运算符expr的遍历
@@ -821,4 +828,9 @@ std::any MiniCCSTVisitor::visitBasicType(MiniCParser::BasicTypeContext * ctx)
     }
 
     return typeAttr;
+}
+
+std::any MiniCCSTVisitor::visitNop(MiniCParser::NopContext * ctx)
+{
+    return create_contain_node(ast_operator_type::AST_OP_BLOCK);
 }

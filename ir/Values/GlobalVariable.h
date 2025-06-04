@@ -17,8 +17,13 @@
 #pragma once
 
 #include "ArrayType.h"
+#include "ConstInt.h"
 #include "GlobalValue.h"
 #include "IRConstant.h"
+#include "IntegerType.h"
+#include "Value.h"
+#include <cstdint>
+#include <string>
 
 ///
 /// @brief 全局变量，寻址时通过符号名或变量名来寻址
@@ -26,6 +31,7 @@
 class GlobalVariable : public GlobalValue {
 
 public:
+
     ///
     /// @brief 构建全局变量，默认对齐为4字节
     /// @param _type 类型
@@ -109,7 +115,21 @@ public:
             // 非数组类型，按原样输出
             str = "declare " + getType()->toString() + " " + getIRName();
         }
+        if (!inBSSSection) {
+            str += " = " + std::to_string(getInitValue());
+        }
     }
+
+    void setInitValue(int32_t val)
+    {
+        initValue = val;
+        inBSSSection = false;
+    }
+
+    int32_t getInitValue()
+    {
+        return initValue;
+	}
 
 private:
     ///
@@ -121,4 +141,9 @@ private:
     /// @brief 默认全局变量在BSS段，没有初始化，或者即使初始化过，但都值都为0
     ///
     bool inBSSSection = true;
+
+    ///
+    /// @brief 全局变量初始值
+    ///
+    int32_t initValue = 0;
 };

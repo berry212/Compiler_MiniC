@@ -18,6 +18,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <functional>
+#include <mutex>
 #include <regex>
 #include <unordered_map>
 #include <vector>
@@ -27,6 +29,7 @@
 #include "BranchInstruction.h"
 #include "Common.h"
 #include "Function.h"
+#include "GlobalVariable.h"
 #include "IRCode.h"
 #include "IRGenerator.h"
 #include "Instruction.h"
@@ -377,10 +380,10 @@ bool IRGenerator::ir_function_formal_params(ast_node * node)
 
                 // 在第一轮将最高维度设置为 0
                 if (dim_node->node_type == ast_operator_type::AST_OP_LEAF_LITERAL_UINT && j == 1) {
-                    dimensions.push_back(0); 
+                    dimensions.push_back(0);
                     continue;
                 }
-                
+
                 if (dim_node->node_type == ast_operator_type::AST_OP_LEAF_LITERAL_UINT) {
                     dimensions.push_back(static_cast<int32_t>(dim_node->integer_val));
                 } else {
@@ -428,6 +431,7 @@ bool IRGenerator::ir_function_formal_params(ast_node * node)
 bool IRGenerator::ir_function_call(ast_node * node)
 {
     std::vector<Value *> realParams;
+    std::vector<ast_node *> paramExpressions; // 存储所有计算好的实参表达式
 
     // 获取当前正在处理的函数
     Function * currentFunc = module->getCurrentFunction();
@@ -461,23 +465,31 @@ bool IRGenerator::ir_function_call(ast_node * node)
             currentFunc->setMaxFuncCallArgCnt(argsCount);
         }
 
-        // 遍历参数列表，子节点是表达式
-        // 这里自左往右计算表达式
+        // 遍历参数列表，计算每个实参表达式
         for (auto son: paramsNode->sons) {
             // 遍历每个实参表达式，进行翻译
             ast_node * tempExpr = ir_visit_ast_node(son);
             if (!tempExpr) {
                 return false;
             }
-            // TODO need fix arg
+
+            // 处理数组访问的解引用
             if (tempExpr->node_type == ast_operator_type::AST_OP_ARRAY_ACCESS &&
-                tempExpr->sons.size() - 1 == // 数组访问的维度数 == 数组的维度数 => 是元素而不是地址，需要解引用
+                tempExpr->sons.size() - 1 ==
                     static_cast<ArrayType *>(ir_visit_ast_node(son->sons[0])->val->getType())->getNumDimensions()) {
                 tempExpr = dereference(tempExpr);
             }
-            realParams.push_back(tempExpr->val);
-            node->blockInsts.addInst(tempExpr->blockInsts);
 
+            // 收集实参值和表达式
+            realParams.push_back(tempExpr->val);
+            paramExpressions.push_back(tempExpr);
+
+            // 添加实参计算指令到当前节点
+            node->blockInsts.addInst(tempExpr->blockInsts);
+        }
+
+        // 第二阶段：为所有实参生成ARG指令
+        for (auto tempExpr: paramExpressions) {
             // 为每个实参生成ARG指令
             ArgInstruction * argInst = new ArgInstruction(currentFunc, tempExpr->val);
             node->blockInsts.addInst(argInst);
@@ -879,13 +891,21 @@ bool IRGenerator::ir_variable_declare(ast_node * node)
 
         // 获取当前函数
         Function * currentFunc = module->getCurrentFunction();
+        if (!currentFunc) {
+            // 全局变量初始化
+            GlobalVariable * g = static_cast<GlobalVariable *>(var);
+            g->setInitValue(expr->integer_val);
+        } else {
+            expr = dereference(expr);
 
-        // 创建并添加赋值指令
-        MoveInstruction * movInst = new MoveInstruction(currentFunc, var, expr->val);
+            // 局部变量初始化赋值指令
+            MoveInstruction * movInst = new MoveInstruction(currentFunc, var, expr->val);
 
-        // 将表达式的指令和赋值指令添加到当前节点
-        node->blockInsts.addInst(expr->blockInsts);
-        node->blockInsts.addInst(movInst);
+            // 将表达式的指令和赋值指令添加到当前节点
+            node->blockInsts.addInst(expr->blockInsts);
+            node->blockInsts.addInst(movInst);
+        }
+
     } else {
         // 无初始化表达式，直接创建变量
         node->val = module->newVarValue(type_node->type, second_node->name);
@@ -1356,6 +1376,7 @@ bool IRGenerator::ir_logical_and(ast_node * node)
     if (!left) {
         return false;
     }
+    left = dereference(left);
 
     // 如果left是逻辑表达式，则会自动生成跳转指令（他拿着我们的真假标签）
     node->blockInsts.addInst(left->blockInsts);
@@ -1380,6 +1401,7 @@ bool IRGenerator::ir_logical_and(ast_node * node)
     if (!right) {
         return false;
     }
+    right = dereference(right);
     // 右操作数指令块
     node->blockInsts.addInst(right->blockInsts);
     if (right_node->node_type != ast_operator_type::AST_OP_LAND &&
@@ -1448,6 +1470,7 @@ bool IRGenerator::ir_logical_or(ast_node * node)
     if (!left) {
         return false;
     }
+    left = dereference(left);
 
     // 如果left是逻辑表达式，则会自动生成跳转指令（他拿着我们的真假标签）
     node->blockInsts.addInst(left->blockInsts);
@@ -1472,6 +1495,7 @@ bool IRGenerator::ir_logical_or(ast_node * node)
     if (!right) {
         return false;
     }
+    right = dereference(right);
     // 右操作数指令块
     node->blockInsts.addInst(right->blockInsts);
     if (right_node->node_type != ast_operator_type::AST_OP_LAND &&
@@ -1533,6 +1557,7 @@ bool IRGenerator::ir_logical_not(ast_node * node)
         if (!operand) {
             return false;
         }
+        operand = dereference(operand);
 
         // 添加操作数的指令块
         node->blockInsts.addInst(operand->blockInsts);
@@ -1621,6 +1646,37 @@ bool IRGenerator::ir_logical_not(ast_node * node)
 /// @return 翻译是否成功，true：成功，false：失败
 bool IRGenerator::ir_if(ast_node * node)
 {
+    // if (node->sons[0]->node_type == ast_operator_type::AST_OP_LEAF_LITERAL_UINT) {
+    //     // 常量条件优化：编译时确定分支
+    //     uint32_t constValue = node->sons[0]->integer_val;
+
+    //     if (constValue != 0) {
+    //         // 条件为真，只执行then分支
+    //         ast_node * then_node = node->sons[1];
+    //         ast_node * then_block = ir_visit_ast_node(then_node);
+    //         if (!then_block) {
+    //             return false;
+    //         }
+
+    //         // 直接添加then块的指令，无需标签和跳转
+    //         node->blockInsts.addInst(then_block->blockInsts);
+    //     } else {
+    //         // 条件为假，只执行else分支（如果存在）
+    //         bool has_else = node->sons.size() > 2;
+    //         if (has_else) {
+    //             ast_node * else_node = node->sons[2];
+    //             ast_node * else_block = ir_visit_ast_node(else_node);
+    //             if (!else_block) {
+    //                 return false;
+    //             }
+
+    //             // 直接添加else块的指令
+    //             node->blockInsts.addInst(else_block->blockInsts);
+    //         }
+    //         // 如果没有else分支且条件为假，则不生成任何指令
+    //     }
+    // }
+
     Function * currentFunc = module->getCurrentFunction();
 
     // 创建if语句的标签：then块、else块(如果有)、if结束块
@@ -1656,9 +1712,7 @@ bool IRGenerator::ir_if(ast_node * node)
             return false;
         }
     }
-
     // 组装指令块
-    node->blockInsts.addInst(cond->blockInsts);
 
     // 注意，如果if的cond_node不是逻辑表达式，我们需要利用他的值来进行跳转
     // 如果是逻辑表达式，在他们自身的处理逻辑中就会创建好跳转指令
@@ -1666,11 +1720,28 @@ bool IRGenerator::ir_if(ast_node * node)
         cond_node->node_type != ast_operator_type::AST_OP_LOR &&
         cond_node->node_type != ast_operator_type::AST_OP_LNOT) {
         // 条件判断：如果条件为真，跳转到then块；否则跳转到else块
+        cond = dereference(cond);
+        node->blockInsts.addInst(cond->blockInsts);
         BranchInstruction * branch = new BranchInstruction(currentFunc,
                                                            cond->val,
                                                            thenLabel,  // true
                                                            elseLabel); // false
         node->blockInsts.addInst(branch);
+    } else if (cond_node->node_type == ast_operator_type::AST_OP_LEAF_LITERAL_UINT) {
+        uint32_t constValue = node->sons[0]->integer_val;
+        GotoInstruction * gotoInst;
+        if (constValue) {
+            gotoInst = new GotoInstruction(currentFunc, thenLabel);
+        } else {
+            if (has_else) {
+                gotoInst = new GotoInstruction(currentFunc, elseLabel);
+            } else {
+                gotoInst = new GotoInstruction(currentFunc, endLabel);
+            }
+        }
+        node->blockInsts.addInst(gotoInst);
+    } else {
+        node->blockInsts.addInst(cond->blockInsts);
     }
 
     // then块
@@ -1722,19 +1793,31 @@ bool IRGenerator::ir_while(ast_node * node)
         return false;
     }
 
-    node->blockInsts.addInst(cond->blockInsts);
-
     // 注意，如果while的cond_node不是逻辑表达式，我们需要利用他的值来进行跳转
     // 如果是逻辑表达式，在他们自身的处理逻辑中就会创建好跳转指令
-    if (cond_node->node_type != ast_operator_type::AST_OP_LAND &&
-        cond_node->node_type != ast_operator_type::AST_OP_LOR &&
-        cond_node->node_type != ast_operator_type::AST_OP_LNOT) {
+    if (cond_node->node_type == ast_operator_type::AST_OP_LEAF_LITERAL_UINT) {
+        uint32_t constValue = node->sons[0]->integer_val;
+        GotoInstruction * gotoInst;
+        if (constValue) {
+            gotoInst = new GotoInstruction(currentFunc, bodyLabel);
+        } else {
+            gotoInst = new GotoInstruction(currentFunc, endLabel);
+        }
+        node->blockInsts.addInst(cond->blockInsts);
+        node->blockInsts.addInst(gotoInst);
+    } else if (cond_node->node_type != ast_operator_type::AST_OP_LAND &&
+               cond_node->node_type != ast_operator_type::AST_OP_LOR &&
+               cond_node->node_type != ast_operator_type::AST_OP_LNOT) {
+        cond = dereference(cond);
+        node->blockInsts.addInst(cond->blockInsts);
         // 条件判断：如果条件为真，跳转到循环体；否则跳转到循环结束
         BranchInstruction * branch = new BranchInstruction(currentFunc,
                                                            cond->val,
                                                            bodyLabel, // true
                                                            endLabel); // false
         node->blockInsts.addInst(branch);
+    } else {
+        node->blockInsts.addInst(cond->blockInsts);
     }
 
     // 循环体
@@ -1916,6 +1999,9 @@ ast_node * IRGenerator::dereference(ast_node * node)
 {
     // 默认指针都是一维
     Value * ptr = node->val;
+    if (!ptr) {
+        return node;
+    }
     if (ptr->getType()->isPointerType()) {
         PointerType * ptrType = static_cast<PointerType *>(ptr->getType());
         Type * elementType = const_cast<Type *>(ptrType->getPointeeType());
@@ -1926,7 +2012,7 @@ ast_node * IRGenerator::dereference(ast_node * node)
         MemMoveInstruction * loadInst =
             new MemMoveInstruction(currentFunc, IRInstOperator::IRINST_OP_LOAD, tmpVar, ptr);
         node->blockInsts.addInst(loadInst);
-        node->val = loadInst->getOperand(0);
+        node->val = tmpVar;
 
         return node;
     }
