@@ -108,6 +108,10 @@ protected:
     void translate_eq_int32(Instruction * inst);
     void translate_ne_int32(Instruction * inst);
 
+    // 内存指令处理
+    void translate_load(Instruction * inst);
+    void translate_store(Instruction * inst);
+
     // 辅助函数 - 生成条件判断代码
     void gen_condition_code(Instruction * inst, const string & cond);
 

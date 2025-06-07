@@ -294,7 +294,7 @@ void ILocArm32::load_base(int rs_reg_no, int base_reg_no, int offset)
             base += "," + toStr(offset);
         }
     } else {
-
+        // 非法偏移量指超出4096，需要先加载立即数到寄存器再用寄存器寻址
         // ldr r8,=-4096
         load_imm(rs_reg_no, offset);
 
@@ -366,7 +366,6 @@ void ILocArm32::load_var(int rs_reg_no, Value * src_var)
         // ldr r8,#100
         load_imm(rs_reg_no, constVal->getVal());
     } else if (src_var->getRegId() != -1) {
-
         // 源操作数为寄存器变量
         int32_t src_regId = src_var->getRegId();
 
@@ -377,15 +376,15 @@ void ILocArm32::load_var(int rs_reg_no, Value * src_var)
         }
     } else if (Instanceof(globalVar, GlobalVariable *, src_var)) {
         // 全局变量
-
-        // 读取全局变量的地址
-        // movw r8, #:lower16:a
-        // movt r8, #:lower16:a
-        load_symbol(rs_reg_no, globalVar->getName());
-
-        // ldr r8, [r8]
-        emit("ldr", PlatformArm32::regName[rs_reg_no], "[" + PlatformArm32::regName[rs_reg_no] + "]");
-
+        if (globalVar->getType()->isArrayType()) {
+            // 全局数组：数组名直接表示基址，不需要解引用
+            load_symbol(rs_reg_no, globalVar->getName());
+            // rs_reg_no 现在包含数组的基址
+        } else {
+            // 全局标量变量：需要解引用获取值
+            load_symbol(rs_reg_no, globalVar->getName());
+            emit("ldr", PlatformArm32::regName[rs_reg_no], "[" + PlatformArm32::regName[rs_reg_no] + "]");
+        }
     } else {
 
         // 栈+偏移的寻址方式
@@ -402,8 +401,16 @@ void ILocArm32::load_var(int rs_reg_no, Value * src_var)
         // 对于栈内分配的局部数组，可直接在栈指针上进行移动与运算
         // 但对于形参，其保存的是调用函数栈的数组的地址，需要读取出来
 
+        // ldr rs_reg_no,[var_baseRegId,#var_offset]
         // ldr r8,[sp,#16]
-        load_base(rs_reg_no, var_baseRegId, var_offset);
+        // 判断是否为数组类型
+        if (src_var->getType()->isArrayType() && !(src_var->getIsFormArray())) {
+            // 局部数组：计算数组地址而不是加载内容
+            leaStack(rs_reg_no, var_baseRegId, var_offset);
+        } else {
+            // 普通变量：从栈中加载值
+            load_base(rs_reg_no, var_baseRegId, var_offset);
+        }
     }
 }
 

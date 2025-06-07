@@ -123,6 +123,7 @@ void Function::toString(std::string & str)
 
     str += ")\n";
 
+    // 函数代码块
     str += "{\n";
 
     // 输出局部变量的名字与IR名字
@@ -147,7 +148,6 @@ void Function::toString(std::string & str)
             str += "\tdeclare " + var->getType()->toString() + " " + var->getIRName();
         }
 
-        std::string extraStr;
         std::string realName = var->getName();
         if (!realName.empty()) {
             str += " ; " + std::to_string(var->getScopeLevel()) + ":" + realName;
@@ -157,7 +157,7 @@ void Function::toString(std::string & str)
     }
 
     // 输出临时变量的declare形式
-    // 遍历所有的线性IR指令，文本输出
+    // 遍历所有的线性IR指令，如果有值 (!VoidType) 则输出声明
     for (auto & inst: code.getInsts()) {
 
         if (inst->hasResultValue()) {
@@ -167,7 +167,7 @@ void Function::toString(std::string & str)
         }
     }
 
-    // 遍历所有的线性IR指令，文本输出
+    // 遍历所有的线性IR指令，输出指令
     for (auto & inst: code.getInsts()) {
 
         std::string instStr;

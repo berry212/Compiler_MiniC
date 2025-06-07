@@ -32,6 +32,11 @@
 class Value {
 
 protected:
+    ///
+    /// @brief 是否是形参数组，形参数组虽然保存了维度信息，但只服务于IR，在 arm32 后端我们要把它当作指针看待
+    ///
+    bool isFormArray = false;
+
     /// @brief 变量名，函数名等原始的名字，可能为空串
     std::string name;
 
@@ -124,4 +129,15 @@ public:
     /// @return int32_t 寄存器编号
     ///
     virtual void setLoadRegId(int32_t regId);
+
+    /// @brief 检查是否是数组基址
+    [[nodiscard]] bool getIsFormArray() const
+    {
+        return isFormArray;
+    }
+
+    void setIsFormArray(bool flag)
+    {
+        isFormArray = flag;
+    }
 };

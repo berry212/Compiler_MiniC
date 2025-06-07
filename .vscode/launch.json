@@ -124,7 +124,7 @@
 			"name": "Qemu Debug minic arm32",
 			"type": "cppdbg",
 			"request": "launch",
-			"program": "${workspaceFolder}/tests/test1-1",
+			"program": "${workspaceFolder}/tests/mytest",
 			"args": [],
 			// 程序的入口（main函数的入口）是否停止
 			"stopAtEntry": true,

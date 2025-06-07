@@ -35,9 +35,7 @@ Module::Module(std::string _name) : name(_name)
     (void) newFunction("getint", IntegerType::getTypeInt(), {}, true);
 
     // void putch(int a)
-    FormalParam * params;
-    params = new FormalParam(IntegerType::getTypeInt(), "a");
-    (void) newFunction("putch", VoidType::getType(), {params}, true);
+    (void) newFunction("putch", VoidType::getType(), {new FormalParam(IntegerType::getTypeInt(), "a")}, true);
 
     // int getch()
     (void) newFunction("getch", IntegerType::getTypeInt(), {}, true);

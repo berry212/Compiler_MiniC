@@ -45,9 +45,13 @@ size_t ArrayType::getNumDimensions() const
 
 int32_t ArrayType::getTotalElements() const
 {
+    // TODO Need Fix Bug: 你在IR生成的时候将最高维度设置未0了，会导致后续getSize返回为0
     int32_t totalSize = 1;
     for (auto dim: dimensions) {
         totalSize *= dim;
+        if (!dim) {
+			return 1;
+		}
     }
     return totalSize;
 }

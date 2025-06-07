@@ -403,7 +403,10 @@ bool IRGenerator::ir_function_formal_params(ast_node * node)
                 minic_log(LOG_ERROR, "为数组形参创建局部变量失败");
                 return false;
             }
-
+            
+            // 设置为形参数组标志
+            arrayVar->setIsFormArray(true);
+            
             // 将形参值赋给局部数组变量
             MoveInstruction * moveInst = new MoveInstruction(currentFunc, arrayVar, param);
             node->blockInsts.addInst(moveInst);
@@ -431,7 +434,6 @@ bool IRGenerator::ir_function_formal_params(ast_node * node)
 bool IRGenerator::ir_function_call(ast_node * node)
 {
     std::vector<Value *> realParams;
-    std::vector<ast_node *> paramExpressions; // 存储所有计算好的实参表达式
 
     // 获取当前正在处理的函数
     Function * currentFunc = module->getCurrentFunction();
@@ -482,16 +484,15 @@ bool IRGenerator::ir_function_call(ast_node * node)
 
             // 收集实参值和表达式
             realParams.push_back(tempExpr->val);
-            paramExpressions.push_back(tempExpr);
 
             // 添加实参计算指令到当前节点
             node->blockInsts.addInst(tempExpr->blockInsts);
         }
 
         // 第二阶段：为所有实参生成ARG指令
-        for (auto tempExpr: paramExpressions) {
+        for (auto val: realParams) {
             // 为每个实参生成ARG指令
-            ArgInstruction * argInst = new ArgInstruction(currentFunc, tempExpr->val);
+            ArgInstruction * argInst = new ArgInstruction(currentFunc, val);
             node->blockInsts.addInst(argInst);
         }
     }

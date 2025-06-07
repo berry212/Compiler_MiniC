@@ -34,7 +34,7 @@
 			"type": "shell",
 			"label": "minic and qemu run arm32",
 			"command": "${workspaceFolder}/tools/arm32-build-gdb.sh",
-			"args": ["${workspaceFolder}", "test1-1"],
+			"args": ["${workspaceFolder}", "mytest"],
 			"isBackground": true,
 			"problemMatcher": [
 				{

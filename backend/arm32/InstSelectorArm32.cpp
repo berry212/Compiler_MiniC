@@ -69,6 +69,10 @@ InstSelectorArm32::InstSelectorArm32(vector<Instruction *> & _irCode,
     translator_handlers[IRInstOperator::IRINST_OP_LE_I] = &InstSelectorArm32::translate_le_int32;
     translator_handlers[IRInstOperator::IRINST_OP_EQ_I] = &InstSelectorArm32::translate_eq_int32;
     translator_handlers[IRInstOperator::IRINST_OP_NE_I] = &InstSelectorArm32::translate_ne_int32;
+
+    // 内存访问
+    translator_handlers[IRInstOperator::IRINST_OP_LOAD] = &InstSelectorArm32::translate_load;
+    translator_handlers[IRInstOperator::IRINST_OP_STORE] = &InstSelectorArm32::translate_store;
 }
 
 ///
@@ -345,40 +349,40 @@ void InstSelectorArm32::translate_call(Instruction * inst)
         simpleRegisterAllocator.Allocate(2);
         simpleRegisterAllocator.Allocate(3);
 
-        // 前四个的后面参数采用栈传递
-        int esp = 0;
-        for (int32_t k = 4; k < operandNum; k++) {
+        // // 前四个的后面参数采用栈传递
+        // int esp = 0;
+        // for (int32_t k = 4; k < operandNum; k++) {
 
-            auto arg = callInst->getOperand(k);
+        //     auto arg = callInst->getOperand(k);
 
-            // 新建一个内存变量，用于栈传值到形参变量中
-            MemVariable * newVal = func->newMemVariable((Type *) PointerType::get(arg->getType()));
-            newVal->setMemoryAddr(ARM32_SP_REG_NO, esp);
-            esp += 4;
+        //     // 新建一个内存变量，用于栈传值到形参变量中
+        //     MemVariable * newVal = func->newMemVariable((Type *) PointerType::get(arg->getType()));
+        //     newVal->setMemoryAddr(ARM32_SP_REG_NO, esp);
+        //     esp += 4;
 
-            Instruction * assignInst = new MoveInstruction(func, newVal, arg);
+        //     Instruction * assignInst = new MoveInstruction(func, newVal, arg);
 
-            // 翻译赋值指令
-            translate_assign(assignInst);
+        //     // 翻译赋值指令
+        //     translate_assign(assignInst);
 
-            delete assignInst;
-        }
+        //     delete assignInst;
+        // }
 
-        for (int32_t k = 0; k < operandNum && k < 4; k++) {
+        // for (int32_t k = 0; k < operandNum && k < 4; k++) {
 
-            auto arg = callInst->getOperand(k);
+        //     auto arg = callInst->getOperand(k);
 
-            // 检查实参的类型是否是临时变量。
-            // 如果是临时变量，该变量可更改为寄存器变量即可，或者设置寄存器号
-            // 如果不是，则必须开辟一个寄存器变量，然后赋值即可
+        //     // 检查实参的类型是否是临时变量。
+        //     // 如果是临时变量，该变量可更改为寄存器变量即可，或者设置寄存器号
+        //     // 如果不是，则必须开辟一个寄存器变量，然后赋值即可
 
-            Instruction * assignInst = new MoveInstruction(func, PlatformArm32::intRegVal[k], arg);
+        //     Instruction * assignInst = new MoveInstruction(func, PlatformArm32::intRegVal[k], arg);
 
-            // 翻译赋值指令
-            translate_assign(assignInst);
+        //     // 翻译赋值指令
+        //     translate_assign(assignInst);
 
-            delete assignInst;
-        }
+        //     delete assignInst;
+        // }
     }
 
     iloc.call_fun(callInst->getName());
@@ -390,17 +394,17 @@ void InstSelectorArm32::translate_call(Instruction * inst)
         simpleRegisterAllocator.free(3);
     }
 
-    // 赋值指令
-    if (callInst->hasResultValue()) {
+    // // 赋值指令
+    // if (callInst->hasResultValue()) {
 
-        // 新建一个赋值操作
-        Instruction * assignInst = new MoveInstruction(func, callInst, PlatformArm32::intRegVal[0]);
+    //     // 新建一个赋值操作
+    //     Instruction * assignInst = new MoveInstruction(func, callInst, PlatformArm32::intRegVal[0]);
 
-        // 翻译赋值指令
-        translate_assign(assignInst);
+    //     // 翻译赋值指令
+    //     translate_assign(assignInst);
 
-        delete assignInst;
-    }
+    //     delete assignInst;
+    // }
 
     // 函数调用后清零，使得下次可正常统计
     realArgCount = 0;
@@ -412,33 +416,33 @@ void InstSelectorArm32::translate_call(Instruction * inst)
 ///
 void InstSelectorArm32::translate_arg(Instruction * inst)
 {
-    // 翻译之前必须确保源操作数要么是寄存器，要么是内存，否则出错。
-    Value * src = inst->getOperand(0);
+    // // 翻译之前必须确保源操作数要么是寄存器，要么是内存，否则出错。
+    // Value * src = inst->getOperand(0);
 
-    // 当前统计的ARG指令个数
-    int32_t regId = src->getRegId();
+    // // 当前统计的ARG指令个数
+    // int32_t regId = src->getRegId();
 
-    if (realArgCount < 4) {
-        // 前四个参数
-        if (regId != -1) {
-            if (regId != realArgCount) {
-                // 肯定寄存器分配有误
-                minic_log(LOG_ERROR, "第%d个ARG指令对象寄存器分配有误: %d", argCount + 1, regId);
-            }
-        } else {
-            minic_log(LOG_ERROR, "第%d个ARG指令对象不是寄存器", argCount + 1);
-        }
-    } else {
-        // 必须是内存分配，若不是则出错
-        int32_t baseRegId;
-        bool result = src->getMemoryAddr(&baseRegId);
-        if ((!result) || (baseRegId != ARM32_SP_REG_NO)) {
+    // if (realArgCount < 4) {
+    //     // 前四个参数
+    //     if (regId != -1) {
+    //         if (regId != realArgCount) {
+    //             // 肯定寄存器分配有误
+    //             minic_log(LOG_ERROR, "第%d个ARG指令对象寄存器分配有误: %d", argCount + 1, regId);
+    //         }
+    //     } else {
+    //         minic_log(LOG_ERROR, "第%d个ARG指令对象不是寄存器", argCount + 1);
+    //     }
+    // } else {
+    //     // 必须是内存分配，若不是则出错
+    //     int32_t baseRegId;
+    //     bool result = src->getMemoryAddr(&baseRegId);
+    //     if ((!result) || (baseRegId != ARM32_SP_REG_NO)) {
 
-            minic_log(LOG_ERROR, "第%d个ARG指令对象不是SP寄存器寻址", argCount + 1);
-        }
-    }
+    //         minic_log(LOG_ERROR, "第%d个ARG指令对象不是SP寄存器寻址", argCount + 1);
+    //     }
+    // }
 
-    realArgCount++;
+    // realArgCount++;
 }
 
 /// @brief 整数乘法指令翻译成ARM32汇编
@@ -750,4 +754,75 @@ void InstSelectorArm32::translate_eq_int32(Instruction * inst)
 void InstSelectorArm32::translate_ne_int32(Instruction * inst)
 {
     gen_condition_code(inst, "ne");
+}
+
+/// @brief load指令翻译成ARM32汇编 - 从内存加载数据
+/// @param inst IR指令
+void InstSelectorArm32::translate_load(Instruction * inst)
+{
+    // load指令格式: %dest = *%src_ptr
+    Value * dest = inst->getOperand(0);    // 目标变量
+    Value * src_ptr = inst->getOperand(1); // 源指针
+
+    int32_t src_ptr_reg_no = src_ptr->getRegId();
+    int32_t load_src_ptr_reg_no;
+
+    // 加载源指针到寄存器（获取内存地址）
+    if (src_ptr_reg_no == -1) {
+        load_src_ptr_reg_no = simpleRegisterAllocator.Allocate(src_ptr);
+        iloc.load_var(load_src_ptr_reg_no, src_ptr);
+    } else {
+        load_src_ptr_reg_no = src_ptr_reg_no;
+    }
+
+    // 从指针指向的内存地址加载数据到临时寄存器
+    int32_t temp_reg_no = simpleRegisterAllocator.Allocate(dest);
+
+    // 使用 ILocArm32 提供的 load_base 方法
+    // 偏移为0，相当于 ldr temp_reg, [src_ptr_reg]
+    iloc.load_base(temp_reg_no, load_src_ptr_reg_no, 0);
+
+    // 将结果存储到目标变量
+    iloc.store_var(temp_reg_no, dest, ARM32_TMP_REG_NO);
+
+    // 释放寄存器
+    simpleRegisterAllocator.free(src_ptr);
+    simpleRegisterAllocator.free(dest);
+}
+
+/// @brief store指令翻译成ARM32汇编 - 向内存存储数据
+/// @param inst IR指令
+void InstSelectorArm32::translate_store(Instruction * inst)
+{
+    // store指令格式: *%dest_ptr = %src
+    Value * dest_ptr = inst->getOperand(0); // 目标指针
+    Value * src = inst->getOperand(1);      // 源数据
+
+    int32_t dest_ptr_reg_no = dest_ptr->getRegId();
+    int32_t src_reg_no = src->getRegId();
+    int32_t load_dest_ptr_reg_no, load_src_reg_no;
+
+    // 加载目标指针到寄存器（获取内存地址）
+    if (dest_ptr_reg_no == -1) {
+        load_dest_ptr_reg_no = simpleRegisterAllocator.Allocate(dest_ptr);
+        iloc.load_var(load_dest_ptr_reg_no, dest_ptr);
+    } else {
+        load_dest_ptr_reg_no = dest_ptr_reg_no;
+    }
+
+    // 加载源数据到寄存器
+    if (src_reg_no == -1) {
+        load_src_reg_no = simpleRegisterAllocator.Allocate(src);
+        iloc.load_var(load_src_reg_no, src);
+    } else {
+        load_src_reg_no = src_reg_no;
+    }
+
+    // 使用 ILocArm32 提供的 store_base 方法
+    // 偏移为0，相当于 str src_reg, [dest_ptr_reg]
+    iloc.store_base(load_src_reg_no, load_dest_ptr_reg_no, 0, ARM32_TMP_REG_NO);
+
+    // 释放寄存器
+    simpleRegisterAllocator.free(dest_ptr);
+    simpleRegisterAllocator.free(src);
 }

@@ -60,10 +60,8 @@ void CodeGeneratorArm32::genDataSection()
     // 全局变量分两种情况：初始化的全局变量和未初始化的全局变量
     // TODO 这里先处理未初始化的全局变量
     for (auto var: module->getGlobalVariables()) {
-
         if (var->isInBSSSection()) {
-
-            // 在BSS段的全局变量，可以包含初值全是0的变量
+            // 在BSS段的全局变量，可以包含数组变量
             fprintf(fp, ".comm %s, %d, %d\n", var->getName().c_str(), var->getType()->getSize(), var->getAlignment());
         } else {
 
@@ -72,7 +70,7 @@ void CodeGeneratorArm32::genDataSection()
             fprintf(fp, ".data\n");
             fprintf(fp, ".align %d\n", var->getAlignment());
             fprintf(fp, ".type %s, %%object\n", var->getName().c_str());
-            fprintf(fp, "%s\n", var->getName().c_str());
+            fprintf(fp, "%s:\n", var->getName().c_str());
             // TODO 全局变量只有int才可以初始化, array不行
             fprintf(fp, ".word %d\n", var->getInitValue());
         }
@@ -172,7 +170,9 @@ void CodeGeneratorArm32::genCodeSection(Function * func)
     iloc.outPut(fp);
 }
 
-/// @brief 寄存器分配
+/// @brief adjustFuncCallInsts设置保存寄存器, 调整函数内指令(主要是参数传递),
+/// stackAlloc 栈空间分配 (函数::局部变量, 有值的指令::临时变量, 函数调用参数传递空间),
+/// adjustFormalParamInsts 设置当前函数参数的位置
 /// @param func 函数指针
 void CodeGeneratorArm32::registerAllocation(Function * func)
 {
@@ -198,10 +198,10 @@ void CodeGeneratorArm32::registerAllocation(Function * func)
     // 至少有FP和LX寄存器需要保护
     std::vector<int32_t> & protectedRegNo = func->getProtectedReg();
     protectedRegNo.clear();
-    protectedRegNo.push_back(ARM32_TMP_REG_NO);
-    protectedRegNo.push_back(ARM32_FP_REG_NO);
+    protectedRegNo.push_back(ARM32_TMP_REG_NO); // r10 临时寄存器
+    protectedRegNo.push_back(ARM32_FP_REG_NO);  // r11 fp寄存器
     if (func->getExistFuncCall()) {
-        protectedRegNo.push_back(ARM32_LX_REG_NO);
+        protectedRegNo.push_back(ARM32_LX_REG_NO); // lx 寄存器，保存函数返回地址
     }
 
     // 调整函数调用指令，主要是前四个寄存器传值，后面用栈传递
@@ -245,7 +245,9 @@ void CodeGeneratorArm32::adjustFormalParamInsts(Function * func)
     for (int k = 4; k < (int) params.size(); k++) {
 
         params[k]->setMemoryAddr(ARM32_FP_REG_NO, fp_esp);
-
+        if (params[k]->getType()->isArrayType()) {
+            params[k]->setIsFormArray(true);
+        }
         // 增加4字节，目前只支持int类型
         fp_esp += params[k]->getType()->getSize();
     }
@@ -404,7 +406,7 @@ void CodeGeneratorArm32::stackAlloc(Function * func)
             // 否则，需要先把偏移量放到寄存器中，然后机制寄存器+偏移寄存器来寻址
             // 之后需要对所有使用到该Value的指令在寄存器分配前要变换。
 
-            // 局部变量偏移设置
+            // 数组也是一个变量，它可以看作有一个很大内存块的变量，但是后续我们要在load_var对数组的加载进行特殊处理
             var->setMemoryAddr(ARM32_FP_REG_NO, -sp_esp);
         }
     }
