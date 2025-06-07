@@ -51,15 +51,26 @@ statement:
 	| block								# blockStatement
 	| ifStatement						# ifStmt
 	| whileStatement					# whileStmt
+	| forStatement						# forStmt
 	| breakStatement					# breakStmt
 	| continueStatement					# continueStmt
 	| expr T_SEMICOLON					# expressionStatement
-	| T_SEMICOLON 						# nop;
+	| T_SEMICOLON						# nop;
 
-// nopStatement: T_SEMICOLON;
+forStatement:
+	T_FOR T_L_PAREN forInit? T_SEMICOLON expr? T_SEMICOLON forUpdate? T_R_PAREN statement;
+
+// for循环的初值部分，支持变量声明或表达式
+forInit: varDeclNoSemi | expr;
+
+varDeclNoSemi: basicType varDef (T_COMMA varDef)*;
+
+// for循环的步进部分，支持多个表达式
+forUpdate: expr (T_COMMA expr)*;
 
 // 新增控制流语句规则
-ifStatement: T_IF T_L_PAREN expr T_R_PAREN statement (T_ELSE statement)?;
+ifStatement:
+	T_IF T_L_PAREN expr T_R_PAREN statement (T_ELSE statement)?;
 whileStatement: T_WHILE T_L_PAREN expr T_R_PAREN statement;
 breakStatement: T_BREAK T_SEMICOLON;
 continueStatement: T_CONTINUE T_SEMICOLON;
@@ -94,7 +105,11 @@ unaryExp:
 	primaryExp
 	| T_ID T_L_PAREN realParamList? T_R_PAREN
 	| unaryOp unaryExp
-	| T_LNOT unaryExp; // 添加逻辑非操作
+	| T_LNOT unaryExp // 添加逻辑非操作
+	| T_INC lVal // 前置自增
+	| T_DEC lVal // 前置自减
+	| lVal T_INC // 后置自增
+	| lVal T_DEC; // 后置自减
 
 // 一元运算符
 unaryOp: T_SUB;
@@ -127,6 +142,10 @@ T_MUL: '*';
 T_DIV: '/';
 T_MOD: '%';
 
+// 新增自增自减运算符
+T_INC: '++';
+T_DEC: '--';
+
 // 要注意关键字同样也属于T_ID，因此必须放在T_ID的前面，否则会识别成T_ID
 T_RETURN: 'return';
 T_INT: 'int';
@@ -134,6 +153,7 @@ T_VOID: 'void';
 T_IF: 'if';
 T_ELSE: 'else';
 T_WHILE: 'while';
+T_FOR: 'for';
 T_BREAK: 'break';
 T_CONTINUE: 'continue';
 

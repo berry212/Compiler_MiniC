@@ -196,4 +196,12 @@ protected:
 
     std::any visitNop(MiniCParser::NopContext * ctx) override;
     std::any visitArrayDeclarator(MiniCParser::ArrayDeclaratorContext * ctx) override;
+
+    // 新增for语句
+    std::any visitForStmt(MiniCParser::ForStmtContext * ctx) override;
+    // 新增for循环相关的访问方法
+    std::any visitForStatement(MiniCParser::ForStatementContext * ctx) override;
+    std::any visitForInit(MiniCParser::ForInitContext * ctx) override;
+    std::any visitForUpdate(MiniCParser::ForUpdateContext * ctx) override;
+    std::any visitVarDeclNoSemi(MiniCParser::VarDeclNoSemiContext * ctx) override;
 };

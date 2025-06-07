@@ -127,6 +127,16 @@ enum class ast_operator_type : int {
     // 数组定义节点，在varDef逻辑中，用于数组指定元素的写
     AST_OP_ARRAY_VAR,
 
+    // for 语句节点
+    AST_OP_FOR,
+    AST_OP_EXPR_LIST,
+
+    // 自增运算符
+    AST_OP_PRE_INC,
+    AST_OP_PRE_DEC,
+    AST_OP_POST_INC,
+    AST_OP_POST_DEC,
+
     /// @brief 最大标识符，表示非法运算符
     AST_OP_MAX,
 };

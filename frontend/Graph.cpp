@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "AST.h"
+#include "BranchInstruction.h"
 #include "Function.h"
 
 using namespace std;
@@ -146,6 +147,24 @@ string getNodeName(ast_node * astnode)
             break;
         case ast_operator_type::AST_OP_ARRAY_VAR:
             nodeName = "array-var";
+            break;
+        case ast_operator_type::AST_OP_FOR:
+            nodeName = "For";
+            break;
+        case ast_operator_type::AST_OP_EXPR_LIST:
+            nodeName = "For Upadte";
+            break;
+        case ast_operator_type::AST_OP_POST_INC:
+            nodeName = "++";
+            break;
+        case ast_operator_type::AST_OP_PRE_INC:
+            nodeName = "++";
+            break;
+        case ast_operator_type::AST_OP_POST_DEC:
+            nodeName = "--";
+            break;
+        case ast_operator_type::AST_OP_PRE_DEC:
+            nodeName = "--";
             break;
         default:
             nodeName = "unknown";
