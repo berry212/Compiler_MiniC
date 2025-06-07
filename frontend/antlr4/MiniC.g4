@@ -76,7 +76,7 @@ breakStatement: T_BREAK T_SEMICOLON;
 continueStatement: T_CONTINUE T_SEMICOLON;
 
 // 分层设计，运算符优先级
-expr: logicOrExp;
+expr: logicOrExp | lVal T_ASSIGN logicOrExp;
 
 logicOrExp: logicAndExp (T_LOR logicAndExp)*;
 
@@ -186,3 +186,6 @@ BLOCK_COMMENT: '/*' .*? '*/' -> skip;
 
 /* 单行注释丢弃 */
 LINE_COMMENT: '//' ~[\r\n]* -> skip;
+
+/* 预处理指令跳过 - 忽略#include等预处理指令 */
+PREPROCESSOR: '#' ~[\r\n]* -> skip;

@@ -224,9 +224,21 @@ std::any MiniCCSTVisitor::visitReturnStatement(MiniCParser::ReturnStatementConte
 /// @param ctx CST上下文
 std::any MiniCCSTVisitor::visitExpr(MiniCParser::ExprContext * ctx)
 {
-    // 识别产生式：expr: addExp;
+    // 识别产生式：expr: logicOrExp | lVal T_ASSIGN logicOrExp;
 
-    return visitLogicOrExp(ctx->logicOrExp());
+    if (ctx->lVal() && ctx->T_ASSIGN() && ctx->logicOrExp()) {
+        // 赋值表达式
+        auto lvalNode = std::any_cast<ast_node *>(visitLVal(ctx->lVal()));
+        auto exprNode = std::any_cast<ast_node *>(visitLogicOrExp(ctx->logicOrExp()));
+
+        // 创建赋值节点
+        return ast_node::New(ast_operator_type::AST_OP_ASSIGN, lvalNode, exprNode, nullptr);
+    } else if (ctx->logicOrExp()) {
+        // 普通表达式
+        return visitLogicOrExp(ctx->logicOrExp());
+    }
+
+    return nullptr;
 }
 
 std::any MiniCCSTVisitor::visitAssignStatement(MiniCParser::AssignStatementContext * ctx)
@@ -914,17 +926,23 @@ std::any MiniCCSTVisitor::visitForStatement(MiniCParser::ForStatementContext * c
 
 std::any MiniCCSTVisitor::visitForInit(MiniCParser::ForInitContext * ctx)
 {
-    // 识别文法产生式：forInit: varDeclNoSemi | expr;
+    ast_node * initContentNode = nullptr;
 
     if (ctx->varDeclNoSemi()) {
-        // 变量声明（无分号版本）
-        return visitVarDeclNoSemi(ctx->varDeclNoSemi());
+        initContentNode = std::any_cast<ast_node *>(visitVarDeclNoSemi(ctx->varDeclNoSemi()));
     } else if (ctx->expr()) {
-        // 表达式
-        return visitExpr(ctx->expr());
+        initContentNode = std::any_cast<ast_node *>(visitExpr(ctx->expr()));
     }
 
-    return nullptr;
+    // 创建FOR_INIT类型的容器节点
+    ast_node * forInitNode = create_contain_node(ast_operator_type::AST_OP_FOR_INIT);
+
+    // 如果有初始化内容，添加为子节点
+    if (initContentNode) {
+        forInitNode->insert_son_node(initContentNode);
+    }
+
+    return forInitNode;
 }
 
 // for循环步进部分
@@ -932,20 +950,14 @@ std::any MiniCCSTVisitor::visitForUpdate(MiniCParser::ForUpdateContext * ctx)
 {
     // 识别文法产生式：forUpdate: expr (T_COMMA expr)*;
 
-    if (ctx->expr().size() == 1) {
-        // 只有一个表达式
-        return visitExpr(ctx->expr(0));
-    } else {
-        // 多个表达式，创建表达式列表节点
-        ast_node * updateListNode = create_contain_node(ast_operator_type::AST_OP_EXPR_LIST);
+    ast_node * updateListNode = create_contain_node(ast_operator_type::AST_OP_FOR_UPDATE);
 
-        for (auto exprCtx: ctx->expr()) {
-            ast_node * exprNode = std::any_cast<ast_node *>(visitExpr(exprCtx));
-            updateListNode->insert_son_node(exprNode);
-        }
-
-        return updateListNode;
+    for (auto exprCtx: ctx->expr()) {
+        ast_node * exprNode = std::any_cast<ast_node *>(visitExpr(exprCtx));
+        updateListNode->insert_son_node(exprNode);
     }
+
+    return updateListNode;
 }
 
 // 新增：处理无分号的变量声明

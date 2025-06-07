@@ -151,7 +151,7 @@ string getNodeName(ast_node * astnode)
         case ast_operator_type::AST_OP_FOR:
             nodeName = "For";
             break;
-        case ast_operator_type::AST_OP_EXPR_LIST:
+        case ast_operator_type::AST_OP_FOR_UPDATE:
             nodeName = "For Upadte";
             break;
         case ast_operator_type::AST_OP_POST_INC:
@@ -165,6 +165,9 @@ string getNodeName(ast_node * astnode)
             break;
         case ast_operator_type::AST_OP_PRE_DEC:
             nodeName = "--";
+            break;
+        case ast_operator_type::AST_OP_FOR_INIT:
+            nodeName = "For Init";
             break;
         default:
             nodeName = "unknown";

@@ -169,6 +169,17 @@ protected:
     bool ir_array_var(ast_node * node);
     bool ir_array_access(ast_node * node);
 
+    // for循环
+    bool ir_for(ast_node * node);
+    bool ir_for_init(ast_node * node);
+    bool ir_for_update(ast_node * node);
+
+    // 自增自减运算符
+    bool ir_pre_inc(ast_node * node);  // 前置自增 ++i
+    bool ir_pre_dec(ast_node * node);  // 前置自减 --i
+    bool ir_post_inc(ast_node * node); // 后置自增 i++
+    bool ir_post_dec(ast_node * node); // 后置自减 i--
+
     ast_node * dereference(ast_node * node);
 
     /// @brief AST的节点操作函数

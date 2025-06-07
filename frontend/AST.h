@@ -129,7 +129,8 @@ enum class ast_operator_type : int {
 
     // for 语句节点
     AST_OP_FOR,
-    AST_OP_EXPR_LIST,
+    AST_OP_FOR_UPDATE,
+    AST_OP_FOR_INIT,
 
     // 自增运算符
     AST_OP_PRE_INC,

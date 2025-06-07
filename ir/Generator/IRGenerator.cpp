@@ -55,6 +55,17 @@
 /// @param _module 符号表
 IRGenerator::IRGenerator(ast_node * _root, Module * _module) : root(_root), module(_module)
 {
+    /*自增自减运算符*/
+    ast2ir_handlers[ast_operator_type::AST_OP_PRE_INC] = &IRGenerator::ir_pre_inc;
+    ast2ir_handlers[ast_operator_type::AST_OP_PRE_DEC] = &IRGenerator::ir_pre_dec;
+    ast2ir_handlers[ast_operator_type::AST_OP_POST_INC] = &IRGenerator::ir_post_inc;
+    ast2ir_handlers[ast_operator_type::AST_OP_POST_DEC] = &IRGenerator::ir_post_dec;
+
+    /*for循环*/
+    ast2ir_handlers[ast_operator_type::AST_OP_FOR] = &IRGenerator::ir_for;
+    ast2ir_handlers[ast_operator_type::AST_OP_FOR_INIT] = &IRGenerator::ir_for_init;
+    ast2ir_handlers[ast_operator_type::AST_OP_FOR_UPDATE] = &IRGenerator::ir_for_update;
+
     /*数组*/
     ast2ir_handlers[ast_operator_type::AST_OP_ARRAY_ACCESS] = &IRGenerator::ir_array_access;
     ast2ir_handlers[ast_operator_type::AST_OP_ARRAY_VAR] = &IRGenerator::ir_array_var;
@@ -403,10 +414,10 @@ bool IRGenerator::ir_function_formal_params(ast_node * node)
                 minic_log(LOG_ERROR, "为数组形参创建局部变量失败");
                 return false;
             }
-            
+
             // 设置为形参数组标志
             arrayVar->setIsFormArray(true);
-            
+
             // 将形参值赋给局部数组变量
             MoveInstruction * moveInst = new MoveInstruction(currentFunc, arrayVar, param);
             node->blockInsts.addInst(moveInst);
@@ -2018,4 +2029,473 @@ ast_node * IRGenerator::dereference(ast_node * node)
         return node;
     }
     return node;
+}
+
+/// @brief for语句AST节点翻译成线性中间IR，翻译成while循环的形式
+/// @param node AST节点
+/// @return 翻译是否成功，true：成功，false：失败
+bool IRGenerator::ir_for(ast_node * node)
+{
+    Function * currentFunc = module->getCurrentFunction();
+
+    // for循环需要自己的作用域，因为forInit的变量只在for循环内有效
+    module->enterScope();
+
+    // 创建for循环相关的标签
+    LabelInstruction * condLabel = new LabelInstruction(currentFunc);
+    LabelInstruction * bodyLabel = new LabelInstruction(currentFunc);
+    LabelInstruction * updateLabel = new LabelInstruction(currentFunc);
+    LabelInstruction * endLabel = new LabelInstruction(currentFunc);
+
+    // 保存循环的开始和结束标签，用于break和continue语句
+    LabelInstruction * oldContinueTarget = currentFunc->getContinueTarget();
+    LabelInstruction * oldBreakTarget = currentFunc->getBreakTarget();
+
+    // 设置当前循环的标签
+    currentFunc->setContinueTarget(updateLabel); // continue跳转到更新部分
+    currentFunc->setBreakTarget(endLabel);       // break跳转到循环结束
+
+    // 解析for循环的各个部分
+    ast_node * initNode = nullptr;
+    ast_node * condNode = nullptr;
+    ast_node * updateNode = nullptr;
+    ast_node * bodyNode = nullptr;
+
+    // for循环节点的子节点顺序：[init, cond, update, body]
+    size_t childIndex = 0;
+    if (childIndex < node->sons.size()) {
+        // 检查第一个子节点是否是初始化部分
+        if (node->sons[childIndex]->node_type == ast_operator_type::AST_OP_FOR_INIT) {
+            initNode = node->sons[childIndex++];
+        }
+    }
+
+    if (childIndex < node->sons.size()) {
+        // 检查是否是条件表达式（非block和非表达式列表）
+        if (node->sons[childIndex]->node_type != ast_operator_type::AST_OP_BLOCK &&
+            node->sons[childIndex]->node_type != ast_operator_type::AST_OP_FOR_UPDATE) {
+            condNode = node->sons[childIndex++];
+        }
+    }
+
+    if (childIndex < node->sons.size()) {
+        // 检查是否是更新表达式
+        if (node->sons[childIndex]->node_type == ast_operator_type::AST_OP_FOR_UPDATE) {
+            updateNode = node->sons[childIndex++];
+        }
+    }
+
+    if (childIndex < node->sons.size()) {
+        // 最后一个应该是循环体
+        bodyNode = node->sons[childIndex];
+    }
+
+    // 第一步：处理初始化部分
+    if (initNode) {
+        ast_node * init = ir_visit_ast_node(initNode);
+        if (!init) {
+            module->leaveScope();
+            return false;
+        }
+        node->blockInsts.addInst(init->blockInsts);
+    }
+
+    // 条件判断块
+    node->blockInsts.addInst(condLabel);
+    
+    if (condNode) {
+        // 为逻辑表达式设置跳转标签
+        condNode->trueLabel = bodyLabel;
+        condNode->falseLabel = endLabel;
+
+        condNode = ir_visit_ast_node(condNode);
+        if (!condNode) {
+            module->leaveScope();
+            return false;
+        }
+
+        if (condNode->node_type == ast_operator_type::AST_OP_LEAF_LITERAL_UINT) {
+            uint32_t constValue = condNode->integer_val; // 修复：使用condNode而不是node->sons[0]
+            GotoInstruction * gotoInst;
+            if (constValue) {
+                gotoInst = new GotoInstruction(currentFunc, bodyLabel);
+            } else {
+                gotoInst = new GotoInstruction(currentFunc, endLabel);
+            }
+            node->blockInsts.addInst(condNode->blockInsts);
+            node->blockInsts.addInst(gotoInst);
+        } else if (condNode->node_type != ast_operator_type::AST_OP_LAND &&
+                   condNode->node_type != ast_operator_type::AST_OP_LOR &&
+                   condNode->node_type != ast_operator_type::AST_OP_LNOT) {
+            // 非逻辑表达式，需要解引用并创建分支指令
+            condNode = dereference(condNode);
+            node->blockInsts.addInst(condNode->blockInsts);
+            BranchInstruction * branch = new BranchInstruction(currentFunc,
+                                                               condNode->val,
+                                                               bodyLabel, // true
+                                                               endLabel); // false
+            node->blockInsts.addInst(branch);
+        } else {
+            // 逻辑表达式会自动生成跳转指令
+            node->blockInsts.addInst(condNode->blockInsts);
+        }
+    } else {
+        // 无条件循环（for(;;)），直接跳转到循环体
+        node->blockInsts.addInst(new GotoInstruction(currentFunc, bodyLabel));
+    }
+
+    // 循环体
+    node->blockInsts.addInst(bodyLabel);
+    if (bodyNode) {
+        ast_node * body = ir_visit_ast_node(bodyNode);
+        node->blockInsts.addInst(body->blockInsts);
+    }
+
+    // 更新部分（continue语句会跳转到这里）
+    node->blockInsts.addInst(updateLabel);
+    if (updateNode) {
+        ast_node * update = ir_visit_ast_node(updateNode);
+        node->blockInsts.addInst(update->blockInsts);
+    }
+
+    // 跳回条件判断
+    node->blockInsts.addInst(new GotoInstruction(currentFunc, condLabel));
+
+    // 循环结束标签
+    node->blockInsts.addInst(endLabel);
+
+    // 恢复之前的break和continue标签
+    currentFunc->setContinueTarget(oldContinueTarget);
+    currentFunc->setBreakTarget(oldBreakTarget);
+
+    // 退出for循环的作用域
+    module->leaveScope();
+
+    return true;
+}
+
+/// @brief 前置自增AST节点翻译成线性中间IR (++i)
+/// @param node AST节点
+/// @return 翻译是否成功，true：成功，false：失败
+bool IRGenerator::ir_pre_inc(ast_node * node)
+{
+    Function * currentFunc = module->getCurrentFunction();
+
+    // 获取左值（变量或数组元素）
+    ast_node * lval_node = ir_visit_ast_node(node->sons[0]);
+    if (!lval_node) {
+        return false;
+    }
+
+    // 添加左值计算指令
+    node->blockInsts.addInst(lval_node->blockInsts);
+
+    // 创建常量1
+    ConstInt * one = module->newConstInt(1);
+
+    // 判断是否是数组访问
+    bool isArrayAccess = node->sons[0]->node_type == ast_operator_type::AST_OP_ARRAY_ACCESS;
+
+    if (isArrayAccess) {
+        // 数组元素自增：先读取，再加1，再存储
+        // 1. 读取数组元素当前值
+        LocalVariable * currentVal = static_cast<LocalVariable *>(module->newVarValue(IntegerType::getTypeInt()));
+        MemMoveInstruction * loadInst =
+            new MemMoveInstruction(currentFunc, IRInstOperator::IRINST_OP_LOAD, currentVal, lval_node->val);
+        node->blockInsts.addInst(loadInst);
+
+        // 2. 加1
+        BinaryInstruction * addInst = new BinaryInstruction(currentFunc,
+                                                            IRInstOperator::IRINST_OP_ADD_I,
+                                                            currentVal,
+                                                            one,
+                                                            IntegerType::getTypeInt());
+        node->blockInsts.addInst(addInst);
+
+        // 3. 存储回数组元素
+        MemMoveInstruction * storeInst =
+            new MemMoveInstruction(currentFunc, IRInstOperator::IRINST_OP_STORE, lval_node->val, addInst);
+        node->blockInsts.addInst(storeInst);
+
+        // 前置自增返回新值
+        node->val = addInst;
+    } else {
+        // 普通变量自增
+        BinaryInstruction * addInst = new BinaryInstruction(currentFunc,
+                                                            IRInstOperator::IRINST_OP_ADD_I,
+                                                            lval_node->val,
+                                                            one,
+                                                            IntegerType::getTypeInt());
+        node->blockInsts.addInst(addInst);
+
+        // 将结果赋值回变量
+        MoveInstruction * moveInst = new MoveInstruction(currentFunc, lval_node->val, addInst);
+        node->blockInsts.addInst(moveInst);
+
+        // 前置自增返回新值
+        node->val = lval_node->val;
+    }
+
+    return true;
+}
+
+/// @brief 前置自减AST节点翻译成线性中间IR (--i)
+/// @param node AST节点
+/// @return 翻译是否成功，true：成功，false：失败
+bool IRGenerator::ir_pre_dec(ast_node * node)
+{
+    Function * currentFunc = module->getCurrentFunction();
+
+    // 获取左值（变量或数组元素）
+    ast_node * lval_node = ir_visit_ast_node(node->sons[0]);
+    if (!lval_node) {
+        return false;
+    }
+
+    // 添加左值计算指令
+    node->blockInsts.addInst(lval_node->blockInsts);
+
+    // 创建常量1
+    ConstInt * one = module->newConstInt(1);
+
+    // 判断是否是数组访问
+    bool isArrayAccess = node->sons[0]->node_type == ast_operator_type::AST_OP_ARRAY_ACCESS;
+
+    if (isArrayAccess) {
+        // 数组元素自减：先读取，再减1，再存储
+        // 1. 读取数组元素当前值
+        LocalVariable * currentVal = static_cast<LocalVariable *>(module->newVarValue(IntegerType::getTypeInt()));
+        MemMoveInstruction * loadInst =
+            new MemMoveInstruction(currentFunc, IRInstOperator::IRINST_OP_LOAD, currentVal, lval_node->val);
+        node->blockInsts.addInst(loadInst);
+
+        // 2. 减1
+        BinaryInstruction * subInst = new BinaryInstruction(currentFunc,
+                                                            IRInstOperator::IRINST_OP_SUB_I,
+                                                            currentVal,
+                                                            one,
+                                                            IntegerType::getTypeInt());
+        node->blockInsts.addInst(subInst);
+
+        // 3. 存储回数组元素
+        MemMoveInstruction * storeInst =
+            new MemMoveInstruction(currentFunc, IRInstOperator::IRINST_OP_STORE, lval_node->val, subInst);
+        node->blockInsts.addInst(storeInst);
+
+        // 前置自减返回新值
+        node->val = subInst;
+    } else {
+        // 普通变量自减
+        BinaryInstruction * subInst = new BinaryInstruction(currentFunc,
+                                                            IRInstOperator::IRINST_OP_SUB_I,
+                                                            lval_node->val,
+                                                            one,
+                                                            IntegerType::getTypeInt());
+        node->blockInsts.addInst(subInst);
+
+        // 将结果赋值回变量
+        MoveInstruction * moveInst = new MoveInstruction(currentFunc, lval_node->val, subInst);
+        node->blockInsts.addInst(moveInst);
+
+        // 前置自减返回新值
+        node->val = lval_node->val;
+    }
+
+    return true;
+}
+
+/// @brief 后置自增AST节点翻译成线性中间IR (i++)
+/// @param node AST节点
+/// @return 翻译是否成功，true：成功，false：失败
+bool IRGenerator::ir_post_inc(ast_node * node)
+{
+    Function * currentFunc = module->getCurrentFunction();
+
+    // 获取左值（变量或数组元素）
+    ast_node * lval_node = ir_visit_ast_node(node->sons[0]);
+    if (!lval_node) {
+        return false;
+    }
+
+    // 添加左值计算指令
+    node->blockInsts.addInst(lval_node->blockInsts);
+
+    // 创建常量1
+    ConstInt * one = module->newConstInt(1);
+
+    // 判断是否是数组访问
+    bool isArrayAccess = node->sons[0]->node_type == ast_operator_type::AST_OP_ARRAY_ACCESS;
+
+    if (isArrayAccess) {
+        // 数组元素自增：先读取旧值，再加1，再存储
+        // 1. 读取数组元素当前值（旧值）
+        LocalVariable * oldVal = static_cast<LocalVariable *>(module->newVarValue(IntegerType::getTypeInt()));
+        MemMoveInstruction * loadInst =
+            new MemMoveInstruction(currentFunc, IRInstOperator::IRINST_OP_LOAD, oldVal, lval_node->val);
+        node->blockInsts.addInst(loadInst);
+
+        // 2. 加1得到新值
+        BinaryInstruction * addInst =
+            new BinaryInstruction(currentFunc, IRInstOperator::IRINST_OP_ADD_I, oldVal, one, IntegerType::getTypeInt());
+        node->blockInsts.addInst(addInst);
+
+        // 3. 存储新值回数组元素
+        MemMoveInstruction * storeInst =
+            new MemMoveInstruction(currentFunc, IRInstOperator::IRINST_OP_STORE, lval_node->val, addInst);
+        node->blockInsts.addInst(storeInst);
+
+        // 后置自增返回旧值
+        node->val = oldVal;
+    } else {
+        // 普通变量自增
+        // 1. 保存旧值
+        LocalVariable * oldVal = static_cast<LocalVariable *>(module->newVarValue(IntegerType::getTypeInt()));
+        MoveInstruction * saveOldInst = new MoveInstruction(currentFunc, oldVal, lval_node->val);
+        node->blockInsts.addInst(saveOldInst);
+
+        // 2. 计算新值
+        BinaryInstruction * addInst = new BinaryInstruction(currentFunc,
+                                                            IRInstOperator::IRINST_OP_ADD_I,
+                                                            lval_node->val,
+                                                            one,
+                                                            IntegerType::getTypeInt());
+        node->blockInsts.addInst(addInst);
+
+        // 3. 将新值赋值回变量
+        MoveInstruction * moveInst = new MoveInstruction(currentFunc, lval_node->val, addInst);
+        node->blockInsts.addInst(moveInst);
+
+        // 后置自增返回旧值
+        node->val = oldVal;
+    }
+
+    return true;
+}
+
+/// @brief 后置自减AST节点翻译成线性中间IR (i--)
+/// @param node AST节点
+/// @return 翻译是否成功，true：成功，false：失败
+bool IRGenerator::ir_post_dec(ast_node * node)
+{
+    Function * currentFunc = module->getCurrentFunction();
+
+    // 获取左值（变量或数组元素）
+    ast_node * lval_node = ir_visit_ast_node(node->sons[0]);
+    if (!lval_node) {
+        return false;
+    }
+
+    // 添加左值计算指令
+    node->blockInsts.addInst(lval_node->blockInsts);
+
+    // 创建常量1
+    ConstInt * one = module->newConstInt(1);
+
+    // 判断是否是数组访问
+    bool isArrayAccess = node->sons[0]->node_type == ast_operator_type::AST_OP_ARRAY_ACCESS;
+
+    if (isArrayAccess) {
+        // 数组元素自减：先读取旧值，再减1，再存储
+        // 1. 读取数组元素当前值（旧值）
+        LocalVariable * oldVal = static_cast<LocalVariable *>(module->newVarValue(IntegerType::getTypeInt()));
+        MemMoveInstruction * loadInst =
+            new MemMoveInstruction(currentFunc, IRInstOperator::IRINST_OP_LOAD, oldVal, lval_node->val);
+        node->blockInsts.addInst(loadInst);
+
+        // 2. 减1得到新值
+        BinaryInstruction * subInst =
+            new BinaryInstruction(currentFunc, IRInstOperator::IRINST_OP_SUB_I, oldVal, one, IntegerType::getTypeInt());
+        node->blockInsts.addInst(subInst);
+
+        // 3. 存储新值回数组元素
+        MemMoveInstruction * storeInst =
+            new MemMoveInstruction(currentFunc, IRInstOperator::IRINST_OP_STORE, lval_node->val, subInst);
+        node->blockInsts.addInst(storeInst);
+
+        // 后置自减返回旧值
+        node->val = oldVal;
+    } else {
+        // 普通变量自减
+        // 1. 保存旧值
+        LocalVariable * oldVal = static_cast<LocalVariable *>(module->newVarValue(IntegerType::getTypeInt()));
+        MoveInstruction * saveOldInst = new MoveInstruction(currentFunc, oldVal, lval_node->val);
+        node->blockInsts.addInst(saveOldInst);
+
+        // 2. 计算新值
+        BinaryInstruction * subInst = new BinaryInstruction(currentFunc,
+                                                            IRInstOperator::IRINST_OP_SUB_I,
+                                                            lval_node->val,
+                                                            one,
+                                                            IntegerType::getTypeInt());
+        node->blockInsts.addInst(subInst);
+
+        // 3. 将新值赋值回变量
+        MoveInstruction * moveInst = new MoveInstruction(currentFunc, lval_node->val, subInst);
+        node->blockInsts.addInst(moveInst);
+
+        // 后置自减返回旧值
+        node->val = oldVal;
+    }
+
+    return true;
+}
+
+/// @brief for循环初始化部分AST节点翻译成线性中间IR
+/// @param node AST节点
+/// @return 翻译是否成功，true：成功，false：失败
+bool IRGenerator::ir_for_init(ast_node * node)
+{
+    // forInit节点可能包含：
+    // 1. 变量声明 (varDeclNoSemi)
+    // 2. 表达式 (expr)
+    // 3. 为空（无初始化）
+
+    if (node->sons.empty()) {
+        // 空初始化，不需要生成任何指令
+        return true;
+    }
+
+    // 处理第一个子节点（应该只有一个）
+    ast_node * initContent = ir_visit_ast_node(node->sons[0]);
+    if (!initContent) {
+        return false;
+    }
+
+    // 将子节点的指令添加到当前节点
+    node->blockInsts.addInst(initContent->blockInsts);
+
+    // 设置值（如果子节点有值的话）
+    node->val = initContent->val;
+
+    return true;
+}
+
+/// @brief for循环更新部分AST节点翻译成线性中间IR
+/// @param node AST节点
+/// @return 翻译是否成功，true：成功，false：失败
+bool IRGenerator::ir_for_update(ast_node * node)
+{
+    // forUpdate节点包含多个表达式：expr (T_COMMA expr)*
+    // 需要按顺序执行每个表达式
+
+    if (node->sons.empty()) {
+        // 空更新，不需要生成任何指令
+        return true;
+    }
+
+    // 处理所有更新表达式
+    for (auto son: node->sons) {
+        ast_node * updateExpr = ir_visit_ast_node(son);
+        if (!updateExpr) {
+            return false;
+        }
+
+        // 将每个表达式的指令添加到当前节点
+        node->blockInsts.addInst(updateExpr->blockInsts);
+    }
+
+    // 更新表达式通常不需要返回值
+    node->val = nullptr;
+
+    return true;
 }
