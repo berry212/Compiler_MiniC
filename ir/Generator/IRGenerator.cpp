@@ -906,7 +906,7 @@ bool IRGenerator::ir_variable_declare(ast_node * node)
         if (!currentFunc) {
             // 全局变量初始化
             GlobalVariable * g = static_cast<GlobalVariable *>(var);
-            g->setInitValue(expr->integer_val);
+            g->setInitValue(static_cast<int32_t>(expr->integer_val));
         } else {
             expr = dereference(expr);
 
@@ -1078,6 +1078,10 @@ bool IRGenerator::ir_neg(ast_node * node)
     // 取负运算符是一元运算符，只有一个子节点
     ast_node * src_node = node->sons[0];
 
+    // 传递真假标签
+    src_node->trueLabel = node->trueLabel;
+    src_node->falseLabel = node->falseLabel;
+    
     // 取负的操作数
     ast_node * operand = ir_visit_ast_node(src_node);
     if (!operand) {
@@ -1103,6 +1107,7 @@ bool IRGenerator::ir_neg(ast_node * node)
     node->blockInsts.addInst(operand->blockInsts);
     node->blockInsts.addInst(negInst);
 
+    node->integer_val = -(operand->integer_val);
     node->val = negInst;
 
     return true;
@@ -1584,6 +1589,7 @@ bool IRGenerator::ir_logical_not(ast_node * node)
                                                                trueLabel); // 如果为假，跳到真标签
             node->blockInsts.addInst(branch);
         }
+        node->val = operand->val;
     } else {
         // 没有上层标签，需要创建自己的标签和结果变量
         Function * currentFunc = module->getCurrentFunction();
@@ -2102,7 +2108,7 @@ bool IRGenerator::ir_for(ast_node * node)
 
     // 条件判断块
     node->blockInsts.addInst(condLabel);
-    
+
     if (condNode) {
         // 为逻辑表达式设置跳转标签
         condNode->trueLabel = bodyLabel;
