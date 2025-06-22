@@ -1664,37 +1664,6 @@ bool IRGenerator::ir_logical_not(ast_node * node)
 /// @return 翻译是否成功，true：成功，false：失败
 bool IRGenerator::ir_if(ast_node * node)
 {
-    // if (node->sons[0]->node_type == ast_operator_type::AST_OP_LEAF_LITERAL_UINT) {
-    //     // 常量条件优化：编译时确定分支
-    //     uint32_t constValue = node->sons[0]->integer_val;
-
-    //     if (constValue != 0) {
-    //         // 条件为真，只执行then分支
-    //         ast_node * then_node = node->sons[1];
-    //         ast_node * then_block = ir_visit_ast_node(then_node);
-    //         if (!then_block) {
-    //             return false;
-    //         }
-
-    //         // 直接添加then块的指令，无需标签和跳转
-    //         node->blockInsts.addInst(then_block->blockInsts);
-    //     } else {
-    //         // 条件为假，只执行else分支（如果存在）
-    //         bool has_else = node->sons.size() > 2;
-    //         if (has_else) {
-    //             ast_node * else_node = node->sons[2];
-    //             ast_node * else_block = ir_visit_ast_node(else_node);
-    //             if (!else_block) {
-    //                 return false;
-    //             }
-
-    //             // 直接添加else块的指令
-    //             node->blockInsts.addInst(else_block->blockInsts);
-    //         }
-    //         // 如果没有else分支且条件为假，则不生成任何指令
-    //     }
-    // }
-
     Function * currentFunc = module->getCurrentFunction();
 
     // 创建if语句的标签：then块、else块(如果有)、if结束块

@@ -1,0 +1,152 @@
+@startuml Frontend Classes
+!define LIGHTBLUE #E1F5FE
+!define LIGHTGREEN #E8F5E8
+!define LIGHTYELLOW #FFF9C4
+!define LIGHTPINK #FCE4EC
+
+package "Frontend" {
+    
+    ' 基础接口类
+    abstract class FrontEndExecutor LIGHTBLUE {
+        # filename: std::string
+        # astRoot: ast_node*
+        + FrontEndExecutor(filename: std::string)
+        + {abstract} run(): bool
+        + getASTRoot(): ast_node*
+    }
+    
+    ' 具体实现类
+    class Antlr4Executor LIGHTGREEN {
+        + Antlr4Executor(filename: std::string)
+        + run(): bool
+    }
+    
+    class RecursiveDescentExecutor LIGHTGREEN {
+        + RecursiveDescentExecutor(filename: std::string)
+        + run(): bool
+    }
+    
+    class FlexBisonExecutor LIGHTGREEN {
+        + FlexBisonExecutor(filename: std::string)
+        + run(): bool
+    }
+    
+    ' AST 相关类
+    class ast_node LIGHTYELLOW {
+        + node_type: ast_operator_type
+        + line_no: int64_t
+        + type: Type*
+        + integer_val: uint32_t
+        + float_val: float
+        + name: std::string
+        + parent: ast_node*
+        + sons: std::vector<ast_node*>
+        
+        + ast_node(type: ast_operator_type)
+        + ast_node(attr: digit_int_attr)
+        + ast_node(attr: var_id_attr)
+        + ast_node(id: std::string, line_no: int64_t)
+        + ast_node(type: Type*)
+        
+        + isLeafNode(): bool
+        + insert_son_node(node: ast_node*): ast_node*
+        
+        + {static} New(type: ast_operator_type, ...): ast_node*
+        + {static} New(attr: digit_int_attr): ast_node*
+        + {static} New(attr: var_id_attr): ast_node*
+        + {static} New(id: std::string, lineno: int64_t): ast_node*
+        + {static} New(type: Type*): ast_node*
+        + {static} Delete(node: ast_node*): void
+    }
+    
+    ' Antlr4 相关类
+    class MiniCCSTVisitor LIGHTPINK {
+        + MiniCCSTVisitor()
+        + run(root: MiniCParser::CompileUnitContext*): ast_node*
+        + visitCompileUnit(ctx: MiniCParser::CompileUnitContext*): std::any
+        + visitFuncDef(ctx: MiniCParser::FuncDefContext*): std::any
+        ' ... 其他 visit 方法
+    }
+    
+    ' 递归下降分析相关类
+    class RecursiveDescentParser {
+        ' 解析器相关方法
+    }
+    
+    class RecursiveDescentFlex {
+        ' 词法分析器相关方法
+    }
+    
+    ' 枚举类型
+    enum ast_operator_type {
+        AST_OP_LEAF_LITERAL_UINT
+        AST_OP_LEAF_VAR_ID
+        AST_OP_BINARY_ADD
+        AST_OP_BINARY_SUB
+        AST_OP_BINARY_MUL
+        AST_OP_BINARY_DIV
+        AST_OP_BINARY_MOD
+        AST_OP_BINARY_LT
+        AST_OP_BINARY_LE
+        AST_OP_BINARY_GT
+        AST_OP_BINARY_GE
+        AST_OP_BINARY_EQ
+        AST_OP_BINARY_NE
+        AST_OP_BINARY_LAND
+        AST_OP_BINARY_LOR
+        AST_OP_UNARY_LNOT
+        AST_OP_UNARY_PLUS
+        AST_OP_UNARY_MINUS
+        AST_OP_FUNC_CALL
+        AST_OP_BLOCK
+        AST_OP_RETURN_STMT
+        AST_OP_IF_STMT
+        AST_OP_WHILE_STMT
+        AST_OP_ASSIGN
+        AST_OP_VAR_DECL
+        AST_OP_FUNC_DEF
+        AST_OP_COMPILE_UNIT
+        AST_OP_MAX
+    }
+    
+    ' 属性类型
+    class digit_int_attr {
+        + val: uint32_t
+        + lineno: int64_t
+    }
+    
+    class var_id_attr {
+        + id: std::string
+        + lineno: int64_t
+    }
+    
+    class type_attr {
+        + type: BasicType
+        + lineno: int64_t
+    }
+}
+
+' 工具函数（独立的函数）
+note top of ast_node : "全局函数:\n+ free_ast(root: ast_node*): void\n+ create_contain_node(...): ast_node*\n+ create_func_call(...): ast_node*\n+ OutputAST(root: ast_node*, filePath: std::string): void"
+
+' 继承关系
+FrontEndExecutor <|-- Antlr4Executor
+FrontEndExecutor <|-- RecursiveDescentExecutor  
+FrontEndExecutor <|-- FlexBisonExecutor
+
+' 依赖关系
+FrontEndExecutor o-- ast_node : creates
+Antlr4Executor ..> MiniCCSTVisitor : uses
+RecursiveDescentExecutor ..> RecursiveDescentParser : uses
+RecursiveDescentExecutor ..> RecursiveDescentFlex : uses
+
+' AST 内部关系
+ast_node o-- ast_node : parent/sons
+ast_node -- ast_operator_type : uses
+
+' 属性关系
+ast_node ..> digit_int_attr : creates from
+ast_node ..> var_id_attr : creates from
+ast_node ..> type_attr : creates from
+
+@enduml

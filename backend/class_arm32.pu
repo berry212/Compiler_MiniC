@@ -1,0 +1,70 @@
+@startuml Backend Class Diagram
+
+package "Backend" {
+    abstract class CodeGenerator {
+        # Module* module
+        # FILE* fp
+        # bool showLinearIR
+        + CodeGenerator(Module* _module)
+        + virtual ~CodeGenerator()
+        + bool run(string outFileName)
+        + void setShowLinearIR(bool show)
+        # virtual bool run() = 0
+    }
+
+    abstract class CodeGeneratorAsm {
+        + CodeGeneratorAsm(Module* _module)
+        + void genCodeSection()
+    }
+
+    package "ARM32" {
+        class CodeGeneratorArm32 {
+        }
+
+        class ILocArm32 {
+        }
+
+        class InstSelectorArm32 {
+        }
+
+        class PlatformArm32 {
+        }
+
+        class SimpleRegisterAllocator {
+        }
+    }
+}
+
+' 继承关系
+CodeGenerator <|-- CodeGeneratorAsm
+CodeGeneratorAsm <|-- CodeGeneratorArm32
+
+' 依赖关系
+CodeGeneratorArm32 ..> SimpleRegisterAllocator : uses
+CodeGeneratorArm32 ..> ILocArm32 : uses
+CodeGeneratorArm32 ..> InstSelectorArm32 : uses
+CodeGeneratorArm32 ..> PlatformArm32 : uses
+
+' 外部依赖
+class Module {
+}
+
+CodeGenerator --> Module : contains
+
+note right of CodeGenerator
+  基础代码生成器抽象类
+  提供通用的代码生成接口
+end note
+
+note right of CodeGeneratorAsm
+  汇编代码生成器抽象类
+  继承自CodeGenerator
+  提供汇编相关的通用功能
+end note
+
+note right of CodeGeneratorArm32
+  ARM32特定的代码生成器
+  实现具体的ARM32汇编生成
+end note
+
+@enduml

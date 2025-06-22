@@ -1,0 +1,263 @@
+@startuml IR_SymbolTable_ClassDiagram
+
+package "IR Core" {
+    abstract class Value {
+        -name: string
+        -type: Type*
+        -uses: vector<Use*>
+        +getName(): string
+        +getType(): Type*
+        +addUse(use: Use*): void
+        +removeUse(use: Use*): void
+    }
+
+    abstract class User {
+        -operands: vector<Use*>
+        +getOperand(index: int): Value*
+        +setOperand(index: int, value: Value*): void
+        +getNumOperands(): int
+    }
+
+    class Use {
+        -usee: Value*
+        -user: User*
+        -operandIndex: int
+        +Use(usee: Value*, user: User*, index: int)
+        +setUsee(newVal: Value*): void
+        +getUsee(): Value*
+        +getUser(): User*
+    }
+
+    abstract class Type {
+        +getSize(): int
+        +toString(): string
+        +isInteger(): bool
+        +isPointer(): bool
+        +isArray(): bool
+    }
+
+    class LabelType {
+        +getSize(): int
+        +toString(): string
+    }
+
+    class IntegerType {
+        -bitWidth: int
+        +IntegerType(bits: int)
+        +getBitWidth(): int
+    }
+
+    class PointerType {
+        -pointeeType: Type*
+        +PointerType(pointee: Type*)
+        +getPointeeType(): Type*
+    }
+
+    class ArrayType {
+        -elementType: Type*
+        -numElements: int
+        +ArrayType(element: Type*, size: int)
+        +getElementType(): Type*
+        +getNumElements(): int
+    }
+}
+
+package "IR Instructions" {
+    abstract class Instruction {
+        -opcode: InstructionType
+        -parent: BasicBlock*
+        +getOpcode(): InstructionType
+        +getParent(): BasicBlock*
+        +toString(): string
+    }
+
+    class BinaryInstruction {
+        -op: BinaryOp
+        +BinaryInstruction(op: BinaryOp, lhs: Value*, rhs: Value*)
+        +getOperator(): BinaryOp
+    }
+
+    class MoveInstruction {
+        +MoveInstruction(src: Value*, dest: Value*)
+    }
+
+    class FuncCallInstruction {
+        -function: Function*
+        -args: vector<Value*>
+        +FuncCallInstruction(func: Function*)
+        +addArgument(arg: Value*): void
+    }
+
+    class EntryInstruction {
+        +EntryInstruction()
+    }
+
+    class ExitInstruction {
+        +ExitInstruction(retVal: Value*)
+    }
+
+    class LabelInstruction {
+        -label: string
+        +LabelInstruction(name: string)
+        +getLabel(): string
+    }
+
+    class GotoInstruction {
+        -target: LabelInstruction*
+        +GotoInstruction(label: LabelInstruction*)
+    }
+
+    class ArgInstruction {
+        -argIndex: int
+        +ArgInstruction(index: int, type: Type*)
+    }
+
+    class MemMoveInstruction {
+        +MemMoveInstruction(src: Value*, dest: Value*, size: Value*)
+    }
+}
+
+package "IR Values" {
+    abstract class GlobalValue {
+        -linkage: Linkage
+        +getLinkage(): Linkage
+        +setLinkage(l: Linkage): void
+    }
+
+    class Function {
+        -name: string
+        -returnType: Type*
+        -parameters: vector<Value*>
+        -basicBlocks: vector<BasicBlock*>
+        +Function(name: string, retType: Type*)
+        +addParameter(param: Value*): void
+        +addBasicBlock(bb: BasicBlock*): void
+    }
+
+    class GlobalVariable {
+        -initializer: Value*
+        +GlobalVariable(name: string, type: Type*)
+        +setInitializer(init: Value*): void
+    }
+
+    class LocalVariable {
+        +LocalVariable(name: string, type: Type*)
+    }
+
+    abstract class Constant {
+        +isConstant(): bool
+    }
+
+    class ConstInt {
+        -value: int32_t
+        +ConstInt(val: int32_t, type: Type*)
+        +getValue(): int32_t
+    }
+}
+
+package "IR Generation" {
+    class IRGenerator {
+        -root: ast_node*
+        -module: Module*
+        -ast2ir_handlers: map<ast_operator_type, handler>
+        +IRGenerator(root: ast_node*, module: Module*)
+        +run(): void
+        +ir_compile_unit(node: ast_node*): bool
+        +ir_function_define(node: ast_node*): bool
+        +ir_assign(node: ast_node*): bool
+        +ir_add(node: ast_node*): bool
+        +ir_sub(node: ast_node*): bool
+        +ir_mul(node: ast_node*): bool
+        +ir_div(node: ast_node*): bool
+        +ir_if(node: ast_node*): bool
+        +ir_while(node: ast_node*): bool
+        +ir_for(node: ast_node*): bool
+    }
+
+    class InterCode {
+        -instructions: vector<Instruction*>
+        +addInstruction(inst: Instruction*): void
+        +getInstructions(): vector<Instruction*>
+        +toString(): string
+    }
+}
+
+package "Symbol Table" {
+    class Module {
+        -name: string
+        -globalVariables: vector<GlobalVariable*>
+        -functions: vector<Function*>
+        -scopeStack: ScopeStack*
+        -constantPool: map<int32_t, ConstInt*>
+        +Module(name: string)
+        +getName(): string
+        +findVarValue(name: string): Value*
+        +enterScope(): void
+        +exitScope(): void
+        +addGlobalVariable(var: GlobalVariable*): void
+        +addFunction(func: Function*): void
+        +outputIR(filePath: string): void
+        +renameIR(): void
+        +toIRString(): string
+        -findConstInt(val: int32_t): ConstInt*
+    }
+
+    class ScopeStack {
+        -scopes: vector<Scope*>
+        +enterScope(): void
+        +exitScope(): void
+        +addSymbol(name: string, value: Value*): void
+        +findSymbol(name: string): Value*
+        +getCurrentScope(): Scope*
+    }
+}
+
+' Inheritance relationships
+Value <|-- User
+Value <|-- Constant
+Value <|-- GlobalValue
+User <|-- Instruction
+GlobalValue <|-- Function
+GlobalValue <|-- GlobalVariable
+Value <|-- LocalVariable
+Constant <|-- ConstInt
+
+Type <|-- LabelType
+Type <|-- IntegerType
+Type <|-- PointerType
+Type <|-- ArrayType
+
+Instruction <|-- BinaryInstruction
+Instruction <|-- MoveInstruction
+Instruction <|-- FuncCallInstruction
+Instruction <|-- EntryInstruction
+Instruction <|-- ExitInstruction
+Instruction <|-- LabelInstruction
+Instruction <|-- GotoInstruction
+Instruction <|-- ArgInstruction
+Instruction <|-- MemMoveInstruction
+
+' Composition relationships
+Use *-- Value : usee
+Use *-- User : user
+User *-- Use : operands
+Value *-- Type : type
+Value *-- Use : uses
+
+Module *-- ScopeStack
+Module *-- GlobalVariable
+Module *-- Function
+Module *-- ConstInt
+
+IRGenerator *-- Module
+IRGenerator o-- InterCode
+
+Function *-- LocalVariable
+Function *-- Instruction
+
+' Dependencies
+IRGenerator ..> Instruction : creates
+IRGenerator ..> Value : manipulates
+Module ..> Value : manages
+
+@enduml

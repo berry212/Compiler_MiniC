@@ -176,6 +176,16 @@
 					}
 				}
 			]
-		}
+		},
+		{
+			"type": "shell",
+			"label": "cpack src",
+			"command": "cpack --config CPackSourceConfig.cmake",
+			"args": [],
+			"options": {
+				"cwd": "${workspaceFolder}/build"
+			},
+			"problemMatcher" : []
+		},
 	]
 }
